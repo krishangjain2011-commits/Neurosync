@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: neurosync
+    runtime: node
+    region: singapore   # closest to India
+    plan: free
+
+    # Build: install deps + compile React frontend
+    buildCommand: npm install && npm run build
+
+    # Start: run Express server (serves built frontend + API)
+    startCommand: NODE_ENV=production node --import tsx/esm server.ts
+
+    # Health check — Render pings this to confirm the service is up
+    healthCheckPath: /api/me
+
+    # Render sets PORT automatically — server reads process.env.PORT
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # ── AI Provider (set at least one) ───────────────────────────────────
+      # Add these in the Render dashboard → Environment tab
+      # Never commit real values here.
+      - key: GROQ_API_KEY
+        sync: false         # means: fill in manually on Render dashboard
+
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+
+      # Optional Gemini fallback
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # ── Database ─────────────────────────────────────────────────────────
+      # Render free tier has ephemeral disk — data resets on redeploy.
+      # For persistence upgrade to a paid plan and add a Disk, then set:
+      #   DB_PATH=/data/neurosync.db
+      # and mount a disk at /data in the Render dashboard.
+      - key: DB_PATH
+        value: /tmp/neurosync.db   # safe default for free tier
+
+      # ── Optional ─────────────────────────────────────────────────────────
+      - key: RESEND_API_KEY
+        sync: false
+
+      - key: BHASHINI_API_KEY
+        sync: false

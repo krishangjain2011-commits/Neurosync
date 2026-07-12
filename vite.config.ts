@@ -10,11 +10,26 @@ export default defineConfig({
       '@': path.resolve(__dirname, '.'),
     },
   },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    sourcemap: false,
+    // Chunk size warning threshold — fine for production
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        // Split large vendor libs for better caching
+        manualChunks: {
+          router: ['react-router-dom'],
+          motion: ['framer-motion'],
+          charts: ['recharts'],
+        },
+      },
+    },
+  },
   server: {
-    // HMR is disabled in AI Studio via DISABLE_HMR env var.
     hmr: process.env.DISABLE_HMR !== 'true',
     proxy: {
-      // Proxy all /api/* requests to the Express server in development
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
