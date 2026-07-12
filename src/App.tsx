@@ -2,6 +2,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { OfflineProvider } from "./context/OfflineContext";
+import { LangProvider, useLang } from "./context/LangContext";
 import Layout from "./components/Layout";
 import AuthPage from "./pages/AuthPage";
 import OnboardingPage from "./pages/OnboardingPage";
@@ -17,10 +18,11 @@ import ProgressPage from "./pages/ProgressPage";
 import ReportsPage from "./pages/ReportsPage";
 
 function Spinner() {
+  const { t } = useLang();
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", backgroundColor: "var(--canvas)", flexDirection: "column", gap: "0.75rem" }}>
       <div style={{ width: "36px", height: "36px", borderRadius: "50%", border: "3px solid var(--accent-light)", borderTopColor: "var(--accent)", animation: "spin 0.7s linear infinite" }} />
-      <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Loading NeuroSync…</span>
+      <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>{t("loading")}</span>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -85,10 +87,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <OfflineProvider>
-        <AppRoutes />
-      </OfflineProvider>
-    </AuthProvider>
+    <LangProvider>
+      <AuthProvider>
+        <OfflineProvider>
+          <AppRoutes />
+        </OfflineProvider>
+      </AuthProvider>
+    </LangProvider>
   );
 }

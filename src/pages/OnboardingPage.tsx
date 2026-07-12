@@ -2,14 +2,11 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
+import { useLang } from "../context/LangContext";
 
-const DIAGNOSES  = ["ADHD","Autism Spectrum Disorder","Dyslexia","Sensory Processing Disorder","Other / Undiagnosed"];
-const TRIGGERS   = ["Loud noises","Bright lights","Crowded spaces","Texture sensitivities","Sudden changes","Strong smells","Physical touch","Screen time"];
-const STRENGTHS  = ["Visual learning","Pattern recognition","Hyperfocus ability","Creative thinking","Memory recall","Logical reasoning","Musical ability","Physical movement"];
-const GOALS      = ["Reduce meltdowns","Build daily routines","Improve communication","Sensory regulation","Academic support","Social skills","Sleep improvement","Dietary management"];
-const STEPS      = ["Child Info","Diagnoses","Sensory Triggers","Strengths","Goals","Consent"];
-
-function MultiSelect({ options, selected, onChange }: { options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
+function MultiSelect({ options, selected, onChange }: {
+  options: string[]; selected: string[]; onChange: (v: string[]) => void;
+}) {
   const toggle = (o: string) => onChange(selected.includes(o) ? selected.filter(s => s !== o) : [...selected, o]);
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
@@ -28,6 +25,7 @@ function MultiSelect({ options, selected, onChange }: { options: string[]; selec
 
 export default function OnboardingPage({ addMode = false }: { addMode?: boolean }) {
   const { addChild } = useAuth();
+  const { t } = useLang();
   const navigate = useNavigate();
   const [step, setStep]     = useState(0);
   const [saving, setSaving] = useState(false);
@@ -40,6 +38,13 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
   });
 
   const set = (key: string) => (val: any) => setForm(f => ({ ...f, [key]: val }));
+
+  // Translated option arrays — keys kept stable in English for DB storage
+  const DIAGNOSES  = [t("diagADHD"), t("diagAutism"), t("diagDyslexia"), t("diagSPD"), t("diagOther")];
+  const TRIGGERS   = [t("trigLoudNoises"), t("trigBrightLights"), t("trigCrowded"), t("trigTexture"), t("trigSuddenChanges"), t("trigSmells"), t("trigTouch"), t("trigScreenTime")];
+  const STRENGTHS  = [t("strVisual"), t("strPattern"), t("strHyperfocus"), t("strCreative"), t("strMemory"), t("strLogical"), t("strMusical"), t("strPhysical")];
+  const GOALS      = [t("goalMeltdowns"), t("goalRoutines"), t("goalCommunication"), t("goalSensory"), t("goalAcademic"), t("goalSocial"), t("goalSleep"), t("goalDiet")];
+  const STEPS      = [t("stepChildInfo"), t("stepDiagnoses"), t("stepSensoryTriggers"), t("stepStrengths"), t("stepGoals"), t("stepConsent")];
 
   const canNext = () => {
     if (step === 0) return form.childName.trim().length > 0;
@@ -60,9 +65,9 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
         strengths: form.strengths,
         goals: form.goals,
       });
-      navigate(addMode ? "/chat" : "/chat");
+      navigate("/chat");
     } catch (err: any) {
-      setError(err.message || "Setup failed. Please try again.");
+      setError(err.message || t("setupFailed"));
     } finally {
       setSaving(false);
     }
@@ -71,52 +76,51 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
   const stepContent = [
     <div key="info" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <div>
-        <label className="label">Child's name</label>
-        <input className="input" value={form.childName} onChange={e => set("childName")(e.target.value)} placeholder="e.g. Arjun" autoFocus />
+        <label className="label">{t("childName")}</label>
+        <input className="input" value={form.childName} onChange={e => set("childName")(e.target.value)} placeholder={t("childNamePlaceholder")} autoFocus />
       </div>
       <div>
-        <label className="label">Age (optional)</label>
-        <input className="input" type="number" min={1} max={18} value={form.childAge} onChange={e => set("childAge")(e.target.value)} placeholder="e.g. 7" style={{ maxWidth: "120px" }} />
+        <label className="label">{t("age")}</label>
+        <input className="input" type="number" min={1} max={18} value={form.childAge} onChange={e => set("childAge")(e.target.value)} placeholder={t("agePlaceholder")} style={{ maxWidth: "120px" }} />
       </div>
     </div>,
 
     <div key="dx">
-      <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.875rem" }}>Select all that apply — unofficial or suspected diagnoses are welcome.</p>
+      <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.875rem" }}>{t("selectAllThatApply")}</p>
       <MultiSelect options={DIAGNOSES} selected={form.diagnoses} onChange={set("diagnoses")} />
     </div>,
 
     <div key="triggers">
-      <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.875rem" }}>Which sensory inputs are most challenging?</p>
+      <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.875rem" }}>{t("sensoryInputQuestion")}</p>
       <MultiSelect options={TRIGGERS} selected={form.sensoryTriggers} onChange={set("sensoryTriggers")} />
     </div>,
 
     <div key="strengths">
-      <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.875rem" }}>Every child has unique strengths — this helps personalise support.</p>
+      <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.875rem" }}>{t("strengthsNote")}</p>
       <MultiSelect options={STRENGTHS} selected={form.strengths} onChange={set("strengths")} />
     </div>,
 
     <div key="goals">
-      <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.875rem" }}>What are your primary caregiving goals?</p>
+      <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.875rem" }}>{t("goalsNote")}</p>
       <MultiSelect options={GOALS} selected={form.goals} onChange={set("goals")} />
     </div>,
 
-    // Consent step (DPDP-aligned)
     <div key="consent" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <div style={{ padding: "1rem", backgroundColor: "var(--blue-light)", borderRadius: "10px", border: "1px solid var(--border)" }}>
-        <h3 style={{ margin: "0 0 0.5rem", fontSize: "0.9rem", fontWeight: 700, color: "var(--blue)" }}>Data Consent Notice</h3>
+        <h3 style={{ margin: "0 0 0.5rem", fontSize: "0.9rem", fontWeight: 700, color: "var(--blue)" }}>{t("consentTitle")}</h3>
         <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.82rem", color: "var(--text-primary)", lineHeight: 1.7 }}>
-          <li>This profile collects your child's behavioral, dietary, and routine data.</li>
-          <li>Data is stored locally and used <strong>only</strong> for caregiving support.</li>
-          <li>No data is shared with third parties or used for advertising.</li>
-          <li>You may delete all data at any time from your account settings.</li>
-          <li>Compliant with India's Digital Personal Data Protection Act 2023.</li>
+          <li>{t("consentItem1")}</li>
+          <li>{t("consentItem2")}</li>
+          <li>{t("consentItem3")}</li>
+          <li>{t("consentItem4")}</li>
+          <li>{t("consentItem5")}</li>
         </ul>
       </div>
       <label style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer" }}>
         <input type="checkbox" checked={form.consentGiven} onChange={e => set("consentGiven")(e.target.checked)}
           style={{ marginTop: "2px", width: "16px", height: "16px", accentColor: "var(--accent)", flexShrink: 0 }} />
         <span style={{ fontSize: "0.83rem", color: "var(--text-primary)", lineHeight: 1.5 }}>
-          I understand and consent to the collection and use of my child's data as described above, for the purpose of caregiving support only.
+          {t("consentCheckbox")}
         </span>
       </label>
     </div>,
@@ -130,10 +134,10 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
         <div style={{ marginBottom: "1.5rem" }}>
           <div style={{ fontSize: "1.4rem", marginBottom: "0.4rem" }}>🧠</div>
           <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>
-            {addMode ? "Add another child" : "Set up your child's profile"}
+            {addMode ? t("addAnotherChild") : t("setupChildProfile")}
           </h2>
           <p style={{ margin: "0.25rem 0 0", fontSize: "0.78rem", color: "var(--text-muted)" }}>
-            Step {step + 1} of {STEPS.length} — {STEPS[step]}
+            {t("stepOf")} {step + 1} {t("of")} {STEPS.length} — {STEPS[step]}
           </p>
         </div>
 
@@ -153,13 +157,13 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
 
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2rem", gap: "0.75rem" }}>
           {step > 0
-            ? <button className="btn-secondary" onClick={() => setStep(s => s - 1)}>← Back</button>
+            ? <button className="btn-secondary" onClick={() => setStep(s => s - 1)}>{t("back")}</button>
             : <div />
           }
           {step < STEPS.length - 1
-            ? <button className="btn-primary" onClick={() => setStep(s => s + 1)} disabled={!canNext()}>Next →</button>
+            ? <button className="btn-primary" onClick={() => setStep(s => s + 1)} disabled={!canNext()}>{t("next")}</button>
             : <button className="btn-primary" onClick={finish} disabled={saving || !canNext()}>
-                {saving ? "Setting up…" : "Start NeuroSync ✓"}
+                {saving ? t("settingUp") : t("startNeuroSync")}
               </button>
           }
         </div>

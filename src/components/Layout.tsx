@@ -3,25 +3,27 @@ import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useOffline } from "../context/OfflineContext";
-
-const NAV_ITEMS = [
-  { path: "/chat",        label: "Helpful Chat",        icon: "💬" },
-  { path: "/behavior",    label: "Behavior Interpreter", icon: "🧩" },
-  { path: "/diet",        label: "Diet Planner",         icon: "🥗" },
-  { path: "/therapy",     label: "Daily Routine",        icon: "📅" },
-  { path: "/homeschool",  label: "Homeschooling",        icon: "📚" },
-  { path: "/visual",      label: "Visual Board",         icon: "🖼️" },
-  { path: "/progress",    label: "Progress Tracker",     icon: "📈" },
-  { path: "/reports",     label: "Reports & Sharing",    icon: "📋" },
-  { path: "/emergency",   label: "Emergency Support",    icon: "🚨" },
-];
+import { useLang } from "../context/LangContext";
 
 export default function Layout() {
   const { user, activeChild, setActiveChild, logout } = useAuth();
   const { isOnline, pendingCount } = useOffline();
+  const { t, lang, setLang, supportedLanguages } = useLang();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const NAV_ITEMS = [
+    { path: "/chat",        label: t("navChat"),      icon: "💬" },
+    { path: "/behavior",    label: t("navBehavior"),   icon: "🧩" },
+    { path: "/diet",        label: t("navDiet"),       icon: "🥗" },
+    { path: "/therapy",     label: t("navTherapy"),    icon: "📅" },
+    { path: "/homeschool",  label: t("navHomeschool"), icon: "📚" },
+    { path: "/visual",      label: t("navVisual"),     icon: "🖼️" },
+    { path: "/progress",    label: t("navProgress"),   icon: "📈" },
+    { path: "/reports",     label: t("navReports"),    icon: "📋" },
+    { path: "/emergency",   label: t("navEmergency"),  icon: "🚨" },
+  ];
 
   const handleLogout = async () => { await logout(); navigate("/auth"); };
 
@@ -38,8 +40,34 @@ export default function Layout() {
           }}>🧠</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text-primary)" }}>NeuroSync</div>
-            <div style={{ fontSize: "0.67rem", color: "var(--text-muted)", letterSpacing: "0.03em" }}>AI Caretaker</div>
+            <div style={{ fontSize: "0.67rem", color: "var(--text-muted)", letterSpacing: "0.03em" }}>{t("aiCaretaker")}</div>
           </div>
+        </div>
+      </div>
+
+      {/* Language switcher */}
+      <div style={{ marginBottom: "0.75rem", padding: "0 0.25rem" }}>
+        <label style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "0.3rem" }}>
+          {t("language")}
+        </label>
+        <div style={{ display: "flex", gap: "0.3rem" }}>
+          {supportedLanguages.map(l => (
+            <button
+              key={l.code}
+              onClick={() => setLang(l.code)}
+              title={l.label}
+              style={{
+                flex: 1, padding: "0.3rem 0.2rem", borderRadius: "6px",
+                border: `1.5px solid ${lang === l.code ? "var(--accent)" : "var(--border)"}`,
+                backgroundColor: lang === l.code ? "var(--accent-light)" : "var(--canvas)",
+                color: lang === l.code ? "var(--accent)" : "var(--text-secondary)",
+                fontSize: "0.72rem", fontWeight: lang === l.code ? 700 : 400,
+                cursor: "pointer", transition: "all 0.12s",
+              }}
+            >
+              {l.nativeLabel}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -47,7 +75,7 @@ export default function Layout() {
       {user && user.children.length > 0 && (
         <div style={{ marginBottom: "0.75rem", padding: "0 0.25rem" }}>
           <label style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "0.3rem" }}>
-            Active Child
+            {t("activeChild")}
           </label>
           <select
             value={activeChild?.id ?? ""}
@@ -69,7 +97,7 @@ export default function Layout() {
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)"; (e.currentTarget as HTMLElement).style.color = "var(--accent)"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
           >
-            <span>＋</span> Add child profile
+            <span>＋</span> {t("addChildProfile")}
           </button>
         </div>
       )}
@@ -103,7 +131,9 @@ export default function Layout() {
       {/* Offline badge */}
       {(!isOnline || pendingCount > 0) && (
         <div style={{ margin: "0.5rem 0.25rem", padding: "0.5rem 0.75rem", backgroundColor: pendingCount > 0 ? "var(--amber-light)" : "var(--surface-2)", borderRadius: "8px", fontSize: "0.75rem", color: pendingCount > 0 ? "var(--amber)" : "var(--text-muted)" }}>
-          {!isOnline ? "📵 Offline mode" : `⏳ ${pendingCount} write${pendingCount !== 1 ? "s" : ""} pending sync`}
+          {!isOnline
+            ? `📵 ${t("offline")}`
+            : `⏳ ${pendingCount} ${t("pendingSync")}`}
         </div>
       )}
 
@@ -120,7 +150,7 @@ export default function Layout() {
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "var(--red-light)"; (e.currentTarget as HTMLElement).style.color = "var(--red)"; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
         >
-          🚪 Sign Out
+          🚪 {t("signOut")}
         </button>
       </div>
     </div>
