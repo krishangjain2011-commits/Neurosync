@@ -37,6 +37,10 @@ import {
   getActiveProvider, SYSTEM_INSTRUCTION,
 } from "./lib/ai-client.js";
 import { purgeStaleCueMedia } from "./db/index.js";
+import {
+  extractEmbedding, cosineSimilarity, computeCentroids,
+  predictTopN, EMBED_VERSION, MATCH_THRESHOLD,
+} from "./lib/embedder.js";
 
 purgeExpiredTokens();
 setInterval(purgeExpiredTokens, 1000 * 60 * 60); // hourly
@@ -494,53 +498,6 @@ async function startServer() {
   });
 
   // ── CUE INTERPRETER ────────────────────────────────────────────────────────
-
-  // Helper: cosine similarity between two float arrays
-  function cosineSimilarity(a: number[], b: number[]): number {
-    if (a.length !== b.length || a.length === 0) return 0;
-    let dot = 0, magA = 0, magB = 0;
-    for (let i = 0; i < a.length; i++) {
-      dot  += a[i] * b[i];
-      magA += a[i] * a[i];
-      magB += b[i] * b[i];
-    }
-    const denom = Math.sqrt(magA) * Math.sqrt(magB);
-    return denom === 0 ? 0 : dot / denom;
-  }
-
-  // Helper: extract a feature embedding from base64 audio/video data
-  // Extracts amplitude bucketing from raw bytes across time windows.
-  // For video: processes more byte windows to capture motion+audio patterns.
-  // For production, swap with a proper ML model (e.g. YAMNet / MobileNet via TF.js).
-  function extractEmbedding(base64Data: string, mediaType: "audio" | "video" = "audio"): number[] {
-    try {
-      const buf = Buffer.from(base64Data, "base64");
-      const DIMS = mediaType === "video" ? 128 : 64;
-      const chunkSize = Math.max(1, Math.floor(buf.length / DIMS));
-      const vec: number[] = [];
-      for (let i = 0; i < DIMS; i++) {
-        let sum = 0, variance = 0;
-        const start = i * chunkSize;
-        const end = Math.min(start + chunkSize, buf.length);
-        const count = end - start;
-        if (count === 0) { vec.push(0); continue; }
-        for (let j = start; j < end; j++) sum += buf[j];
-        const mean = sum / count;
-        for (let j = start; j < end; j++) variance += (buf[j] - mean) ** 2;
-        // Store both mean energy + variance (motion/sound dynamics)
-        vec.push(mean / 255);
-        if (vec.length < DIMS) vec.push(Math.sqrt(variance / count) / 255);
-      }
-      // Pad or trim to exact DIMS
-      while (vec.length < DIMS) vec.push(0);
-      return vec.slice(0, DIMS);
-    } catch {
-      return new Array(128).fill(0);
-    }
-  }
-
-  const MATCH_THRESHOLD = 0.82; // cosine similarity above this = confident match
-
   // DOWNLOAD full local model — all embeddings + labels for client-side matching
   app.get("/api/children/:id/cues/model", authenticate, (req, res) => {
     const childId = parseInt(req.params.id, 10);
@@ -554,7 +511,13 @@ async function startServer() {
        ORDER BY confirmed_count DESC`
     ).all(childId) as any[];
 
-    const model = cues.map(c => ({
+    const examples = cues.map((c: any) => ({
+      label:  c.label as string,
+      vector: JSON.parse(c.embedding_vector) as number[],
+    }));
+    const centroids = computeCentroids(examples);
+
+    const model = cues.map((c: any) => ({
       id:        c.id,
       label:     c.label,
       mediaType: c.media_type,
@@ -564,10 +527,13 @@ async function startServer() {
 
     res.json({
       childId,
-      cueCount: model.length,
-      trained: model.length >= 6,
+      cueCount:     model.length,
+      trained:      model.length >= 6,
       model,
-      exportedAt: new Date().toISOString(),
+      centroids,      // pre-computed centroids for faster local matching
+      embedVersion:   EMBED_VERSION,
+      matchThreshold: MATCH_THRESHOLD,
+      exportedAt:     new Date().toISOString(),
     });
   });
 
@@ -628,52 +594,57 @@ async function startServer() {
       "SELECT id, label, embedding_vector, confirmed_count FROM cue_library WHERE child_id=? AND embedding_vector IS NOT NULL"
     ).all(childId) as any[];
 
-    let bestMatch: { id: number; label: string; score: number } | null = null;
-    for (const cue of cues) {
-      try {
-        const vec: number[] = JSON.parse(cue.embedding_vector);
-        const score = cosineSimilarity(queryVec, vec);
-        if (!bestMatch || score > bestMatch.score) {
-          bestMatch = { id: cue.id, label: cue.label, score };
-        }
-      } catch {}
+    if (cues.length === 0) {
+      const eventInfo = db.prepare("INSERT INTO cue_events (child_id) VALUES (?)").run(childId);
+      return res.json({ matched: false, eventId: eventInfo.lastInsertRowid, closestCues: [] });
     }
 
-    if (bestMatch && bestMatch.score >= MATCH_THRESHOLD) {
-      // Confident match — log and return
-      db.prepare(
-        `INSERT INTO cue_events (child_id, matched_cue_id, match_confidence)
-         VALUES (?,?,?)`
-      ).run(childId, bestMatch.id, bestMatch.score);
+    // Build centroid map: label → mean of all vectors with that label
+    // (multiple teach examples per label improve accuracy via nearest-centroid)
+    const examples = cues.map((c: any) => ({
+      label:  c.label,
+      vector: JSON.parse(c.embedding_vector) as number[],
+      id:     c.id,
+      weight: c.confirmed_count as number,
+    }));
+    const centroids = computeCentroids(examples);
 
-      // Increment confirmed_count
+    // Nearest-centroid + softmax confidence (ported from Copy's PrototypeClassifier)
+    const topResults = predictTopN(queryVec, centroids, 3);
+
+    if (topResults.length > 0 && topResults[0].confidence >= MATCH_THRESHOLD) {
+      const best = topResults[0];
+      // Find the actual cue row with the highest confirmed_count for this label
+      const bestCue = cues
+        .filter((c: any) => c.label === best.label)
+        .sort((a: any, b: any) => b.confirmed_count - a.confirmed_count)[0];
+
+      db.prepare(
+        `INSERT INTO cue_events (child_id, matched_cue_id, match_confidence) VALUES (?,?,?)`
+      ).run(childId, bestCue.id, best.score);
+
       db.prepare("UPDATE cue_library SET confirmed_count = confirmed_count + 1, updated_at = datetime('now') WHERE id=?")
-        .run(bestMatch.id);
+        .run(bestCue.id);
 
       return res.json({
-        matched: true,
-        label: bestMatch.label,
-        confidence: Math.round(bestMatch.score * 100),
-        cueId: bestMatch.id,
+        matched:    true,
+        label:      best.label,
+        confidence: Math.round(best.confidence * 100),
+        score:      Math.round(best.score * 100),
+        cueId:      bestCue.id,
+        embedVersion: EMBED_VERSION,
       });
     }
 
-    // No confident match — return all candidates ranked for new-signal mode
-    const ranked = cues
-      .map(c => {
-        try {
-          const vec: number[] = JSON.parse(c.embedding_vector);
-          return { id: c.id, label: c.label, score: cosineSimilarity(queryVec, vec) };
-        } catch { return null; }
-      })
-      .filter(Boolean)
-      .sort((a: any, b: any) => b.score - a.score)
-      .slice(0, 3);
+    // No confident match — return ranked alternatives and create pending event
+    const ranked = topResults.map(r => {
+      const cue = cues
+        .filter((c: any) => c.label === r.label)
+        .sort((a: any, b: any) => b.confirmed_count - a.confirmed_count)[0];
+      return { id: cue?.id, label: r.label, score: r.score, confidence: r.confidence };
+    });
 
-    // Create a pending cue_event for new-signal flow
-    const eventInfo = db.prepare(
-      "INSERT INTO cue_events (child_id) VALUES (?)"
-    ).run(childId);
+    const eventInfo = db.prepare("INSERT INTO cue_events (child_id) VALUES (?)").run(childId);
 
     res.json({ matched: false, eventId: eventInfo.lastInsertRowid, closestCues: ranked });
   });
