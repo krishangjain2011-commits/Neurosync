@@ -174,6 +174,23 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_cue_events_child ON cue_events(child_id);
   CREATE INDEX IF NOT EXISTS idx_cue_events_created ON cue_events(created_at);
+
+  -- ── Handwriting Interpreter ──────────────────────────────────────────────────
+
+  CREATE TABLE IF NOT EXISTS handwriting_samples (
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    child_id                  INTEGER NOT NULL REFERENCES children_profiles(id) ON DELETE CASCADE,
+    image_ref                 TEXT,             -- storage path, nullable (can be discarded post-processing)
+    retain_image              INTEGER NOT NULL DEFAULT 0, -- 1 = caregiver opted to keep image
+    raw_transcription         TEXT,             -- literal best-effort reading
+    interpreted_text          TEXT,             -- AI corrected version
+    flagged_patterns          TEXT,             -- JSON: {b_d_reversals, phonetic_substitutions, spacing_irregular}
+    caregiver_confirmed_text  TEXT,             -- caregiver correction / confirmation
+    created_by_user_id        INTEGER NOT NULL REFERENCES users(id),
+    created_at                DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_hw_child    ON handwriting_samples(child_id);
+  CREATE INDEX IF NOT EXISTS idx_hw_created  ON handwriting_samples(created_at);
 `);
 
 // ─── Safe migrations ─────────────────────────────────────────────────────────

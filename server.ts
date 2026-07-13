@@ -832,6 +832,197 @@ Return ONLY the JSON array, no other text.`;
     res.json({ id: info.lastInsertRowid, name, type: type ?? "family" });
   });
 
+  // ── HANDWRITING INTERPRETER ───────────────────────────────────────────────
+
+  const HW_SYSTEM_PROMPT =
+    "You are reading a photo of a child's handwriting for a caregiver. " +
+    "The child may have dyslexia, so their writing may include letter reversals (e.g. b/d, p/q), " +
+    "phonetic spelling, or irregular spacing. " +
+    "Return TWO readings and a pattern analysis. " +
+    "Never state a diagnosis or severity assessment — only describe what you observe in this sample. " +
+    "Frame all output as supportive interpretation, and encourage the caregiver to share pattern " +
+    "trends with a learning specialist or educational therapist rather than relying on this as a " +
+    "clinical assessment.";
+
+  // POST /api/children/:id/handwriting — analyze an uploaded handwriting image
+  app.post("/api/children/:id/handwriting", authenticate, async (req, res) => {
+    const childId = parseInt(req.params.id, 10);
+    const { sessionUser } = req as any;
+
+    const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+      .get(sessionUser.userId, childId);
+    if (!access) return res.status(403).json({ error: "No access to this child" });
+
+    const { imageData, retainImage = false } = req.body;
+    // imageData: base64 encoded image (jpeg/png)
+    if (!imageData) return res.status(400).json({ error: "imageData (base64) required" });
+
+    const child: any = db.prepare("SELECT onboarding_data FROM children_profiles WHERE id=?").get(childId);
+    const profile = child?.onboarding_data ? JSON.parse(child.onboarding_data) : {};
+
+    const prompt =
+      `${HW_SYSTEM_PROMPT}
+
+Child context:
+- Name: ${profile.childName ?? "the child"}
+- Age: ${profile.childAge ?? "unknown"}
+- Diagnoses: ${profile.diagnoses?.join(", ") || "Not specified"}
+
+Analyze the handwriting in this image and return ONLY valid JSON in this exact structure:
+{
+  "raw_transcription": "exact literal reading of what is written, character by character",
+  "interpreted_text": "your best guess at what the child intended to write, with corrections",
+  "flagged_patterns": {
+    "b_d_reversals": 0,
+    "p_q_reversals": 0,
+    "other_reversals": [],
+    "phonetic_substitutions": [],
+    "spacing_irregular": false,
+    "sizing_inconsistent": false,
+    "observations": "one sentence of supportive, non-diagnostic observations"
+  }
+}`;
+
+    try {
+      // Use Gemini vision (multimodal) — Groq does not support image input
+      const { GoogleGenAI } = await import("@google/genai");
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (!geminiKey) {
+        return res.status(503).json({
+          error: "Handwriting analysis requires a Gemini API key. Add GEMINI_API_KEY to your .env file (free at aistudio.google.com).",
+          code: "GEMINI_KEY_MISSING",
+        });
+      }
+
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite";
+
+      // Strip data URL prefix if present
+      const base64Clean = imageData.replace(/^data:image\/[a-z]+;base64,/, "");
+
+      const response = await ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: "image/jpeg", data: base64Clean } },
+            ],
+          },
+        ],
+      });
+
+      const raw = response.text ?? "";
+      const { result: repaired } = repairJson(raw, "/api/handwriting");
+
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(repaired);
+      } catch {
+        return res.status(422).json({ error: "Could not parse AI response", raw });
+      }
+
+      const flaggedPatterns = parsed.flagged_patterns ?? {};
+      const reversalCount =
+        (flaggedPatterns.b_d_reversals ?? 0) +
+        (flaggedPatterns.p_q_reversals ?? 0) +
+        (flaggedPatterns.other_reversals?.length ?? 0);
+      const phoneticCount = flaggedPatterns.phonetic_substitutions?.length ?? 0;
+
+      // Save sample (image_ref only if caregiver opted in)
+      const info = db.prepare(`
+        INSERT INTO handwriting_samples
+          (child_id, image_ref, retain_image, raw_transcription, interpreted_text, flagged_patterns, created_by_user_id)
+        VALUES (?,?,?,?,?,?,?)
+      `).run(
+        childId,
+        retainImage ? `hw_${childId}_${Date.now()}` : null,
+        retainImage ? 1 : 0,
+        parsed.raw_transcription ?? "",
+        parsed.interpreted_text ?? "",
+        JSON.stringify(flaggedPatterns),
+        sessionUser.userId,
+      );
+      const sampleId = info.lastInsertRowid as number;
+
+      // Write pattern counts into progress table so they appear on Progress Tracker
+      if (reversalCount > 0) {
+        db.prepare("INSERT INTO progress (child_id, metric_type, value, recorded_by_user_id) VALUES (?,?,?,?)")
+          .run(childId, "handwriting_reversal_count", reversalCount, sessionUser.userId);
+      }
+      if (phoneticCount > 0) {
+        db.prepare("INSERT INTO progress (child_id, metric_type, value, recorded_by_user_id) VALUES (?,?,?,?)")
+          .run(childId, "handwriting_phonetic_count", phoneticCount, sessionUser.userId);
+      }
+
+      res.json({
+        sampleId,
+        rawTranscription: parsed.raw_transcription,
+        interpretedText:  parsed.interpreted_text,
+        flaggedPatterns,
+        reversalCount,
+        phoneticCount,
+      });
+    } catch (err: any) {
+      console.error("[handwriting]", err);
+      res.status(500).json({ error: err.message || "Handwriting analysis failed" });
+    }
+  });
+
+  // PATCH /api/children/:id/handwriting/:sampleId — caregiver confirms/corrects
+  app.patch("/api/children/:id/handwriting/:sampleId", authenticate, (req, res) => {
+    const childId  = parseInt(req.params.id, 10);
+    const sampleId = parseInt(req.params.sampleId, 10);
+    const { sessionUser } = req as any;
+
+    const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+      .get(sessionUser.userId, childId);
+    if (!access) return res.status(403).json({ error: "No access" });
+
+    const { confirmedText } = req.body;
+    if (!confirmedText?.trim()) return res.status(400).json({ error: "confirmedText required" });
+
+    db.prepare("UPDATE handwriting_samples SET caregiver_confirmed_text=? WHERE id=? AND child_id=?")
+      .run(confirmedText.trim(), sampleId, childId);
+
+    res.json({ status: "confirmed" });
+  });
+
+  // GET /api/children/:id/handwriting — list past samples
+  app.get("/api/children/:id/handwriting", authenticate, (req, res) => {
+    const childId = parseInt(req.params.id, 10);
+    const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+      .get((req as any).sessionUser.userId, childId);
+    if (!access) return res.status(403).json({ error: "No access" });
+
+    const samples = db.prepare(`
+      SELECT id, raw_transcription, interpreted_text, flagged_patterns,
+             caregiver_confirmed_text, retain_image, created_at
+      FROM   handwriting_samples
+      WHERE  child_id = ?
+      ORDER  BY created_at DESC
+      LIMIT  30
+    `).all(childId);
+
+    res.json(samples.map((s: any) => ({
+      ...s,
+      flagged_patterns: s.flagged_patterns ? JSON.parse(s.flagged_patterns) : {},
+    })));
+  });
+
+  // DELETE /api/children/:id/handwriting/:sampleId — individual erasure
+  app.delete("/api/children/:id/handwriting/:sampleId", authenticate, (req, res) => {
+    const childId  = parseInt(req.params.id, 10);
+    const sampleId = parseInt(req.params.sampleId, 10);
+    const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+      .get((req as any).sessionUser.userId, childId);
+    if (!access) return res.status(403).json({ error: "No access" });
+
+    db.prepare("DELETE FROM handwriting_samples WHERE id=? AND child_id=?").run(sampleId, childId);
+    res.json({ status: "deleted" });
+  });
+
   // ── REPORTS ───────────────────────────────────────────────────────────────
 
   // Generate a full child report as structured JSON (parent prints / shares)
