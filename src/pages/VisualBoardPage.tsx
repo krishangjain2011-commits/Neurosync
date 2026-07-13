@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import FeatureTour from "../components/FeatureTour";
 
 interface PecsCard {
   label: string;
@@ -97,6 +98,21 @@ export default function VisualBoardPage() {
           PECS-style picture cards for non-verbal and augmentative communication. Tap a card to hear it spoken aloud.
         </p>
       </div>
+
+      <FeatureTour
+        featureKey="visual"
+        icon="🖼️"
+        title="Visual Communication Board"
+        summary="PECS-style picture communication cards that speak aloud when tapped. Designed for non-verbal children or those who communicate better through images than words."
+        tips={[
+          "Tap any card to hear it spoken aloud using your device's text-to-speech.",
+          "Build a sentence by tapping multiple cards — then tap 'Speak Sentence' to say them all.",
+          "Filter cards by category: Needs, Activities, Feelings, Places, People.",
+          "Works offline — no internet needed once the page has loaded.",
+          "Show this screen directly to your child — the large colourful cards are designed for easy tapping.",
+        ]}
+        accentColor="var(--amber)"
+      />
 
       {/* Sentence strip */}
       <div

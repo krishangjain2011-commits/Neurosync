@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { apiPost, apiGet } from "../lib/api";
+import FeatureTour from "../components/FeatureTour";
 
 interface DayMeal { day: string; breakfast: string; lunch: string; dinner: string; snacks: string[]; sensoryNotes: string; allergenWarnings: string[]; }
 interface DietPlan { weeklyPlan: DayMeal[]; generalNotes: string; nutritionFocus: string[]; }
@@ -64,6 +65,20 @@ Return JSON: { "weeklyPlan": [{ "day":"Monday","breakfast":"..","lunch":"..","di
         </div>
         <p style={{ margin: 0, fontSize: "0.83rem", color: "var(--text-secondary)" }}>Sensory-aware, structured weekly meal plans.</p>
       </div>
+
+      <FeatureTour
+        featureKey="diet"
+        icon="🥗"
+        title="Diet Planner"
+        summary="Generates a personalised 7-day meal plan that accounts for your child's sensory sensitivities, texture preferences, and dietary restrictions. Plans are saved so you can refer back to them."
+        tips={[
+          "Select dietary restrictions (gluten-free, dairy-free, etc.) before generating.",
+          "Choose texture preferences — important for children with oral sensory sensitivities.",
+          "Each day shows breakfast, lunch, dinner, and snacks with allergen warnings.",
+          "Tap 'Save Plan' to store it — view past plans under the History tab.",
+        ]}
+        accentColor="var(--green)"
+      />
 
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
         {(["generate","history"] as const).map(t => (

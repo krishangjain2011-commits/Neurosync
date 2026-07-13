@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { apiPost, apiGet, apiDelete } from "../lib/api";
+import FeatureTour from "../components/FeatureTour";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -392,6 +393,22 @@ Return as JSON:
           Multi-modal lesson plans · Dyslexia-aware handwriting interpreter
         </p>
       </div>
+
+      <FeatureTour
+        featureKey="homeschool"
+        icon="📚"
+        title="Homeschooling Helper"
+        summary="Two tools in one: an AI lesson planner that creates multi-modal activities tailored to your child's learning style, and a dyslexia-aware handwriting interpreter that reads your child's written work and tracks letter reversal patterns over time."
+        tips={[
+          "Lesson Planner: pick a subject, topic, and difficulty — the AI creates a step-by-step lesson with visual, auditory, and kinesthetic activities.",
+          "Each lesson step includes materials needed, duration, and a specific accommodation for your child.",
+          "Handwriting Interpreter: upload or photograph your child's written work to get a literal + corrected reading side by side.",
+          "Patterns like b/d reversals and phonetic spellings are shown as simple tags — never as scores or severity ratings.",
+          "Pattern counts are automatically added to the Progress Tracker so you can see trends over weeks.",
+          "Handwriting Interpreter requires a free Gemini API key (aistudio.google.com) for image analysis.",
+        ]}
+        accentColor="var(--blue)"
+      />
 
       {/* Tab switcher */}
       <div style={{ display: "flex", backgroundColor: "var(--surface-2)", borderRadius: "10px", padding: "3px", marginBottom: "1.5rem", gap: "2px" }}>

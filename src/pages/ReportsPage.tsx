@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { apiGet, apiPost, apiDelete } from "../lib/api";
+import FeatureTour from "../components/FeatureTour";
 
 interface ShareEntry {
   id: number;
@@ -196,6 +197,21 @@ export default function ReportsPage() {
           </div>
         </div>
       </div>
+
+      <FeatureTour
+        featureKey="reports"
+        icon="📋"
+        title="Reports & Sharing"
+        summary="Generates a complete child development report from all the data you've logged — progress metrics, diet plans, routines, strengths, and goals. Share it by email or grant direct in-app access to Anganwadi workers, schools, or doctors."
+        tips={[
+          "Click 'Generate AI Narrative' for a professional summary paragraph ready to share with a specialist.",
+          "Print the report using the Print button — it formats cleanly for A4.",
+          "Email the report directly to an institution using the email field (requires Resend API key).",
+          "Share tab: grant a worker or teacher access to your child's profile using their email — they must have a NeuroSync account.",
+          "You can revoke access at any time from the Share tab.",
+        ]}
+        accentColor="var(--green)"
+      />
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>

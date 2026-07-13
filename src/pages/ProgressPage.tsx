@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { apiGet, apiPost } from "../lib/api";
+import FeatureTour from "../components/FeatureTour";
 
 interface ProgressRow {
   id: number;
@@ -113,6 +114,22 @@ export default function ProgressPage() {
           {activeChild?.onboarding_data?.childName && ` for ${activeChild.onboarding_data.childName}`}.
         </p>
       </div>
+
+      <FeatureTour
+        featureKey="progress"
+        icon="📈"
+        title="Progress Tracker"
+        summary="Log daily behavioral observations and see trends over time as charts. Handwriting pattern data from the Homeschooling module also appears here automatically."
+        tips={[
+          "Log entries daily for the best trend picture — even a 30-second check-in helps.",
+          "Calm-down Interval: how many minutes it takes your child to de-escalate.",
+          "Meltdown Intensity: rate 1–10 to track whether episodes are becoming milder.",
+          "Focus Duration: log how long the child sustained attention during a task.",
+          "Handwriting reversal counts are added automatically when you use the Handwriting Interpreter.",
+          "Share the Progress Tracker data with a therapist or school to back up your observations.",
+        ]}
+        accentColor="var(--blue)"
+      />
 
       {/* Log new entry */}
       <div className="card" style={{ marginBottom: "1.5rem" }}>

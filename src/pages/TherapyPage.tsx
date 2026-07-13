@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { apiPost, apiGet } from "../lib/api";
+import FeatureTour from "../components/FeatureTour";
 
 interface Slot { time: string; activity: string; type: "therapy"|"play"|"break"|"meal"|"learning"|"transition"; duration: string; materials?: string[]; tips?: string; }
 interface Schedule { title: string; slots: Slot[]; parentTips: string[]; focusGoal: string; }
@@ -67,6 +68,20 @@ Return JSON: { "title":"..","focusGoal":"..","slots":[{"time":"9:00 AM","activit
         </div>
         <p style={{ margin: 0, fontSize: "0.83rem", color: "var(--text-secondary)" }}>AI-crafted timed therapy and play schedules.</p>
       </div>
+      <FeatureTour
+        featureKey="therapy"
+        icon="📅"
+        title="Daily Routine Planner"
+        summary="Generates a structured daily schedule with timed therapy, play, meals, and breaks — tailored to your child's needs and the number of hours you have available."
+        tips={[
+          "Set a focus area (e.g. communication, motor skills) to tailor the schedule.",
+          "Choose how many hours the routine should cover and the intensity level.",
+          "Each slot shows the activity, duration, materials needed, and a sensory tip.",
+          "Save schedules and revisit them under the History tab.",
+          "Color-coded blocks: 🧩 therapy, 🎮 play, ☁️ break, 🍽️ meal, 📖 learning, 🔄 transition.",
+        ]}
+        accentColor="var(--accent)"
+      />
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
         {(["generate","history"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}

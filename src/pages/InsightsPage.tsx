@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
 import { apiGet } from "../lib/api";
+import FeatureTour from "../components/FeatureTour";
 
 interface Overview {
   totalChildren: number;
@@ -71,6 +72,21 @@ export default function InsightsPage() {
           🔒 District Admin View — De-identified Only
         </div>
       </div>
+
+      <FeatureTour
+        featureKey="insights"
+        icon="📊"
+        title="Population Insights Dashboard"
+        summary="Aggregated, de-identified analytics for district admins — total children enrolled, diagnosis distribution, sensory trigger patterns, and module adoption rates across your organisation. No individual child data is ever shown."
+        tips={[
+          "All data is aggregated at the SQL level — individual children are never identifiable.",
+          "Diagnosis Breakdown shows which conditions are most common in your district.",
+          "Trigger Heatmap highlights the most prevalent sensory challenges across children.",
+          "Use module adoption data to see which tools caregivers find most useful.",
+          "This view is only visible to users with the district_admin role.",
+        ]}
+        accentColor="var(--blue)"
+      />
 
       {/* Stat cards */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}

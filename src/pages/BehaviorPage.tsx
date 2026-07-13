@@ -9,6 +9,7 @@ import {
   matchAgainstLocalModel, MIN_CUES_FOR_TRAINING,
   type LocalModel,
 } from "../lib/cue-model";
+import FeatureTour from "../components/FeatureTour";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useOffline } from "../context/OfflineContext";
 import { useLang } from "../context/LangContext";
 import { streamGemini } from "../lib/api";
+import FeatureTour from "../components/FeatureTour";
 
 interface Message { id: string; role: "user" | "assistant"; content: string; }
 
@@ -94,6 +95,7 @@ export default function ChatPage() {
         background: "linear-gradient(90deg, var(--surface) 0%, var(--honey-light) 100%)",
         display: "flex", alignItems: "center", gap: "0.75rem",
       }}>
+
         <span style={{ fontSize: "1.25rem" }}>💬</span>
         <div>
           <h1 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>{t("chatTitle")}</h1>
@@ -112,6 +114,19 @@ export default function ChatPage() {
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem 1.5rem" }}>
+        <FeatureTour
+          featureKey="chat"
+          icon="💬"
+          title="Helpful Chat"
+          summary="Your AI caregiving assistant — ask anything about your child's behaviour, routines, sensory needs, or day-to-day challenges. Responses are personalised using your child's profile."
+          tips={[
+            "Use the quick prompts below to get started instantly.",
+            "The AI knows your child's diagnoses and sensory triggers — mention specific situations for tailored advice.",
+            "Type in English, Hindi, or Marathi — switch language from the sidebar anytime.",
+            "Chat history is not saved between sessions, so screenshot anything useful.",
+          ]}
+          accentColor="var(--accent)"
+        />
         {messages.length === 1 && (
           <div style={{ marginBottom: "1.25rem" }}>
             <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>{t("chatQuickPrompts")}</p>

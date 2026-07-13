@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { apiPost } from "../lib/api";
+import FeatureTour from "../components/FeatureTour";
 
 const EMERGENCY_CONCERNS = [
   "Severe meltdown / self-harm",
@@ -87,6 +88,20 @@ export default function EmergencyPage() {
 
   return (
     <div style={{ padding: "1.5rem", maxWidth: "720px", margin: "0 auto" }}>
+      <FeatureTour
+        featureKey="emergency"
+        icon="🚨"
+        title="Emergency Support"
+        summary="Provides immediate AI-guided steps for caregiving crises — meltdowns, self-harm, medical emergencies — alongside India-specific helpline numbers. Always call 112 for life-threatening situations."
+        tips={[
+          "India's unified emergency number is 112 (Police + Ambulance). Call immediately for life-threatening situations.",
+          "CHILDLINE 1098 is free, 24/7, and pan-India — for any child welfare concern.",
+          "Select your concern from the list or describe it in your own words.",
+          "Share your location (optional) to get guidance specific to your area.",
+          "iCall (9152987821) and Vandrevala Foundation offer free mental health support.",
+        ]}
+        accentColor="var(--red)"
+      />
       {/* Header */}
       <div
         style={{
@@ -113,8 +128,7 @@ export default function EmergencyPage() {
 
       {/* Hotlines — always visible */}
       <div className="card" style={{ marginBottom: "1.25rem" }}>
-        <h2 style={{ margin: "0 0 0.875rem", fontSize: "0.95rem", fontWeight: 700 }}>📞 Emergency Hotlines</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "0.6rem" }}>
+        <h2 style={{ margin: "0 0 0.875rem", fontSize: "0.95rem", fontWeight: 700 }}>📞 Emergency Hotlines</h2>        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "0.6rem" }}>
           {HOTLINES.map((h) => (
             <div
               key={h.name}
