@@ -9,6 +9,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
+import { existsSync, unlinkSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -200,6 +201,25 @@ function columnExists(table: string, column: string): boolean {
   return cols.some((c) => c.name === column);
 }
 
+// v3: cue_events — add columns for two-step prediction flow
+if (!columnExists("cue_events", "embedding_vector")) {
+  db.exec(`ALTER TABLE cue_events ADD COLUMN embedding_vector TEXT`);
+  console.log("[DB] cue_events: added embedding_vector");
+}
+if (!columnExists("cue_events", "embedding_model")) {
+  db.exec(`ALTER TABLE cue_events ADD COLUMN embedding_model TEXT`);
+  console.log("[DB] cue_events: added embedding_model");
+}
+if (!columnExists("cue_events", "audio_duration_ms")) {
+  db.exec(`ALTER TABLE cue_events ADD COLUMN audio_duration_ms INTEGER`);
+  console.log("[DB] cue_events: added audio_duration_ms");
+}
+// cue_library — ensure media_ref exists (may be absent on older installs)
+if (!columnExists("cue_library", "media_ref")) {
+  db.exec(`ALTER TABLE cue_library ADD COLUMN media_ref TEXT`);
+  console.log("[DB] cue_library: added media_ref");
+}
+
 // v1 → v2: users table restructure
 if (!columnExists("users", "org_id")) {
   console.log("[DB] Migrating users table to v2 schema…");
@@ -228,17 +248,32 @@ if (orgCount === 0) {
 
 /**
  * Retention policy: nullify media_ref on cue_events older than 30 days.
+ * Also deletes the actual file from disk if it still exists.
  * Raw clips must not persist — only embeddings + labels in cue_library are kept.
  */
 export function purgeStaleCueMedia(): void {
-  const info = db.prepare(`
-    UPDATE cue_events
-    SET    media_ref = NULL
+  // Fetch paths before nullifying so we can delete from disk
+  const stale: any[] = db.prepare(`
+    SELECT media_ref FROM cue_events
     WHERE  media_ref IS NOT NULL
       AND  created_at <= datetime('now', '-30 days')
-  `).run();
-  if (info.changes > 0) {
-    console.log(`[DB] Purged media_ref from ${info.changes} stale cue_events.`);
+  `).all() as any[];
+
+  if (stale.length > 0) {
+    // Delete files from disk
+    for (const row of stale) {
+      try {
+        if (existsSync(row.media_ref)) unlinkSync(row.media_ref);
+      } catch { /* ignore — file may already be gone */ }
+    }
+
+    const info = db.prepare(`
+      UPDATE cue_events
+      SET    media_ref = NULL
+      WHERE  media_ref IS NOT NULL
+        AND  created_at <= datetime('now', '-30 days')
+    `).run();
+    console.log(`[DB] Purged media_ref + files from ${info.changes} stale cue_events.`);
   }
 }
 

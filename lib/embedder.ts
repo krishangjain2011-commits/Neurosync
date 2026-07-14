@@ -351,7 +351,7 @@ export function computeCentroids(
  * Low temperature (0.10) sharpens probabilities — a clearly better match
  * gets a much higher confidence score rather than being diluted by class count.
  */
-export function softmax(scores: number[], temperature = 0.10): number[] {
+export function softmax(scores: number[], temperature = 0.30): number[] {
   const scaled = scores.map(s => s / temperature);
   const maxVal = Math.max(...scaled);
   const exps   = scaled.map(s => Math.exp(s - maxVal)); // subtract max for numerical stability
@@ -372,7 +372,7 @@ export function predictTopN(
   const labels  = Object.keys(centroids);
   if (labels.length === 0) return [];
 
-  const similarities = labels.map(label => cosineSimilarity(queryVector, centroids[label]));
+  const similarities  = labels.map(label => cosineSimilarity(queryVector, centroids[label]));
   const probabilities = softmax(similarities);
 
   const results = labels
@@ -383,4 +383,4 @@ export function predictTopN(
 }
 
 export const EMBED_VERSION = "fft-mel-delta-v1";
-export const MATCH_THRESHOLD = 0.65; // softmax confidence above this = confident match
+export const MATCH_THRESHOLD = 0.35; // softmax confidence above this = confident match (lowered from 0.65 — small datasets need lower bar)

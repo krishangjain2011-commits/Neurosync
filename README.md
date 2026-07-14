@@ -5,53 +5,71 @@ Built for India — supports English, हिंदी, and मराठी.
 
 ---
 
-## Deploy on Render (Free)
+## Quick Start (Local)
 
-### Step 1 — Fork / push to GitHub
-Make sure your code is pushed to GitHub (already done).
+```bash
+# 1. Clone and install
+git clone https://github.com/krishangjain2011-commits/NeuroSync.git
+cd NeuroSync
+npm install
 
-### Step 2 — Create a new Web Service on Render
-1. Go to [render.com](https://render.com) → **New** → **Web Service**
-2. Connect your GitHub account and select the **NeuroSync** repository
-3. Render will auto-detect `render.yaml` and pre-fill settings
+# 2. Configure environment
+cp .env.example .env
+# Edit .env — add your GROQ_API_KEY (free at console.groq.com)
 
-### Step 3 — Set environment variables
-In the Render dashboard → **Environment** tab, add:
+# 3. Start the app
+start.bat          # Windows — starts app + ML sidecar together
+# or
+npm run dev:full   # cross-platform via npm
 
-| Variable | Value | Required |
-|---|---|---|
-| `GROQ_API_KEY` | Your key from [console.groq.com](https://console.groq.com) (free) | ✅ Yes |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | ✅ Yes |
-| `NODE_ENV` | `production` | ✅ Yes (auto-set) |
-| `GEMINI_API_KEY` | From [aistudio.google.com](https://aistudio.google.com) | Optional |
-| `RESEND_API_KEY` | From [resend.com](https://resend.com) — for email reports | Optional |
-| `DB_PATH` | `/tmp/neurosync.db` (free tier) or `/data/neurosync.db` (paid disk) | Optional |
+# Open http://localhost:3000
+```
 
-### Step 4 — Deploy
-Click **Create Web Service**. Render will:
-1. Run `npm install && npm run build` (builds the React frontend)
-2. Start the server with `NODE_ENV=production node --import tsx/esm server.ts`
-3. Serve everything from port `$PORT` (assigned by Render)
+### With Python ML Sidecar (recommended for Behavior Interpreter)
 
-> **Note on the free tier:** Render's free tier has an ephemeral filesystem — the SQLite database resets on each redeploy. For persistent data, upgrade to a paid plan, add a **Disk** mounted at `/data`, and set `DB_PATH=/data/neurosync.db`.
+The sidecar provides real MFCC audio embeddings via librosa + ffmpeg.
+Falls back to a JS approximation automatically if not running.
+
+**Prerequisites:** Python 3.10+, ffmpeg (`winget install Gyan.FFmpeg` on Windows)
+
+```bash
+# First-time setup
+npm run ml:setup
+
+# Start everything together
+npm run dev:full
+```
 
 ---
 
-## Run Locally
+## Deploy on Render (Free)
 
-```bash
-# Install dependencies
-npm install
+### Step 1 — Push to GitHub
+Push your repo to GitHub (already done if you cloned this).
 
-# Copy env template and fill in your API key
-cp .env.example .env
-# Edit .env — add at minimum: GROQ_API_KEY=your_key
+### Step 2 — Create a Web Service on Render
+1. Go to [render.com](https://render.com) → **New** → **Web Service**
+2. Connect GitHub and select the **NeuroSync** repository
+3. Render auto-detects `render.yaml` and pre-fills settings
 
-# Start development server (hot reload)
-npm run dev
-```
+### Step 3 — Set environment variables
+In **Render dashboard → Environment tab**, add:
 
-Open [http://localhost:3000](http://localhost:3000)
+| Variable | Value | Required |
+|---|---|---|
+| `GROQ_API_KEY` | Free key from [console.groq.com](https://console.groq.com) | ✅ Yes |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | auto-set |
+| `NODE_ENV` | `production` | auto-set |
+| `RESEND_API_KEY` | From [resend.com](https://resend.com) — for email reports | Optional |
+| `DB_PATH` | `/data/neurosync.db` (add paid Disk) or `/tmp/neurosync.db` | Optional |
+| `UPLOADS_DIR` | `/data/uploads` (paid Disk) or `/tmp/uploads` | Optional |
+
+### Step 4 — Deploy
+Click **Create Web Service**. Build takes ~2 min.
+
+> **Free tier note:** Render's free tier has an ephemeral filesystem — SQLite DB and uploaded audio files reset on each redeploy. For persistence, upgrade to a paid plan, add a **Disk** at `/data`, and set `DB_PATH=/data/neurosync.db` and `UPLOADS_DIR=/data/uploads`.
+
+> **ML sidecar note:** The Python ML sidecar cannot run on Render's free tier (requires a separate Python service). The app automatically falls back to the JS embedder for audio matching when the sidecar is unavailable.
 
 ---
 
@@ -59,31 +77,70 @@ Open [http://localhost:3000](http://localhost:3000)
 
 | Layer | Technology |
 |---|---|
-| Server | Node.js ESM, Express, tsx |
-| Frontend | React 18, Vite, TailwindCSS v4, framer-motion |
+| Server | Node.js ESM, Express 4, tsx |
+| Frontend | React 18, Vite 6, TailwindCSS v4, framer-motion |
 | Database | SQLite via better-sqlite3 |
-| AI | Groq (llama-3.3-70b-versatile) + Gemini 2.5 Flash fallback |
-| Auth | Opaque session tokens, bcrypt, rate limiting |
+| AI — Text | Groq (llama-3.3-70b-versatile) + Gemini 2.5 Flash fallback |
+| AI — Vision | Groq (meta-llama/llama-4-scout-17b-16e-instruct) for handwriting |
+| ML — Audio | Python FastAPI sidecar: librosa MFCC + nearest-centroid classifier |
+| Auth | Opaque session tokens, bcrypt, express-rate-limit |
 | i18n | Baked-in EN / HI / MR translations |
+| File storage | Multer disk storage, 30-day auto-purge |
+
+---
 
 ## Modules
 
-1. 💬 Helpful Chat — real-time streaming AI chat
-2. 🧩 Behavior Interpreter — audio/video cue recognition + AI analysis
-3. 🥗 Diet Planner — sensory-aware meal plans
-4. 📅 Daily Routine — timed therapy schedules
-5. 📚 Homeschooling Helper — multi-modal lesson plans
-6. 🖼️ Visual Board — PECS communication cards with TTS
-7. 📈 Progress Tracker — behavioral metrics + charts
-8. 📋 Reports & Sharing — printable reports, email to institutions
-9. 🚨 Emergency Support — India helplines + AI guidance
-10. 📊 Population Insights — district admin analytics
+| # | Module | Description |
+|---|---|---|
+| 1 | 💬 Helpful Chat | Real-time streaming AI chat with child profile context |
+| 2 | 🎙️ Behaviour Interpreter | Audio cue recording → MFCC embedding → on-device matching |
+| 3 | 🥗 Diet Planner | Sensory-aware AI meal plans |
+| 4 | 📅 Daily Routine | Timed therapy schedules |
+| 5 | 📚 Homeschooling Helper | Lesson planner + handwriting analysis (Groq vision) |
+| 6 | 🖼️ Visual Board | PECS communication cards with text-to-speech |
+| 7 | 📈 Progress Tracker | Behavioral metrics + trend charts |
+| 8 | 📋 Reports & Sharing | Printable PDF reports, email to institutions |
+| 9 | 🚨 Emergency Support | India helplines + AI de-escalation guidance |
+| 10 | 📊 Population Insights | District admin analytics (de-identified) |
 
 ---
 
 ## Privacy & Compliance
 
-- DPDP Act 2023 compliant consent layer
-- No data shared with third parties
-- Right to erasure (§17) implemented
+- **DPDP Act 2023** compliant consent layer
+- Right to erasure (§17) fully implemented — deletes DB rows, audio files, and ML models
+- Audio recordings auto-purged after 30 days
+- On-device IndexedDB model — no audio embeddings leave the user's device for local matching
 - Multi-tenant org model (family, Anganwadi, school, PHC, NGO, district admin)
+- No data shared with third parties without explicit consent
+
+---
+
+## Project Structure
+
+```
+neurosync/
+├── server.ts          # Express server (API + Vite SSR in dev)
+├── db/index.ts        # SQLite schema + migrations
+├── lib/
+│   ├── ai-client.ts   # Groq/Gemini unified client
+│   ├── auth.ts        # Session tokens + RBAC
+│   ├── consent.ts     # DPDP consent enforcement
+│   ├── embedder.ts    # JS audio embedder (fallback)
+│   └── language-bridge.ts  # Bhashini i18n bridge
+├── ml/                # Python FastAPI ML sidecar
+│   ├── main.py        # FastAPI endpoints
+│   ├── embedder.py    # MFCC feature extraction (librosa)
+│   ├── classifier.py  # Nearest-centroid + softmax classifier
+│   └── requirements.txt
+├── src/               # React frontend
+│   ├── pages/         # One file per module
+│   ├── components/    # Shared UI components
+│   ├── context/       # React contexts (auth, offline, lang)
+│   └── lib/           # Client utilities (api, cue-model, i18n)
+├── uploads/           # Audio recordings (gitignored, auto-purged)
+├── start.bat          # Windows one-click launcher
+├── render.yaml        # Render deployment config
+└── .env.example       # Environment variable template
+```

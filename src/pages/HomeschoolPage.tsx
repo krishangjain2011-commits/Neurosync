@@ -405,7 +405,7 @@ Return as JSON:
           "Handwriting Interpreter: upload or photograph your child's written work to get a literal + corrected reading side by side.",
           "Patterns like b/d reversals and phonetic spellings are shown as simple tags — never as scores or severity ratings.",
           "Pattern counts are automatically added to the Progress Tracker so you can see trends over weeks.",
-          "Handwriting Interpreter requires a free Gemini API key (aistudio.google.com) for image analysis.",
+          "Handwriting Interpreter uses Groq AI vision (llama-4-scout) — works with your existing Groq API key.",
         ]}
         accentColor="var(--blue)"
       />

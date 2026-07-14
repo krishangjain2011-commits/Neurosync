@@ -288,7 +288,7 @@ export function cosineSim(a: number[], b: number[]): number {
 
 // ── Temperature-scaled softmax (ported from Copy's classifier.py) ─────────────
 
-function softmax(scores: number[], temperature = 0.10): number[] {
+function softmax(scores: number[], temperature = 0.30): number[] {
   const scaled = scores.map(s => s / temperature);
   const maxVal = Math.max(...scaled);
   const exps   = scaled.map(s => Math.exp(s - maxVal));
@@ -298,7 +298,7 @@ function softmax(scores: number[], temperature = 0.10): number[] {
 
 // ── Nearest-centroid + softmax local matching ─────────────────────────────────
 
-export const MATCH_THRESHOLD    = 0.65;  // softmax confidence threshold
+export const MATCH_THRESHOLD    = 0.35;  // softmax confidence threshold (lowered for small datasets)
 export const MIN_CUES_FOR_TRAINING = 6;
 
 export interface MatchResult {
@@ -345,14 +345,15 @@ export function matchAgainstLocalModel(queryVec: number[], model: LocalModel): M
   const bestConf  = probabilities[bestIdx];
   const bestScore = similarities[bestIdx];
 
-  if (bestConf >= MATCH_THRESHOLD) {
-    // Find the highest-confirmed cue with this label
+  const RAW_COSINE_THRESHOLD = 0.40;
+
+  if (bestConf >= MATCH_THRESHOLD || bestScore >= RAW_COSINE_THRESHOLD) {
     const labelCues = model.cues.filter(c => c.label === bestLabel);
     const bestCue   = labelCues.sort((a, b) => b.weight - a.weight)[0];
     return {
       matched:    true,
       label:      bestLabel,
-      confidence: Math.round(bestConf * 100),
+      confidence: Math.round(Math.max(bestConf, bestScore) * 100),
       score:      Math.round(bestScore * 100),
       cueId:      bestCue?.id,
     };

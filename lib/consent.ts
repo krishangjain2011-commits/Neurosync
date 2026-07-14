@@ -7,6 +7,9 @@
  */
 
 import db from "../db/index.js";
+import { unlinkSync, existsSync } from "fs";
+import { fileURLToPath } from "url";
+import path from "path";
 import type { SessionUser } from "./auth.js";
 
 export interface ConsentRecord {
@@ -120,6 +123,21 @@ export function eraseChildData(
 
   if (cr?.consent_record_id) {
     revokeConsent(cr.consent_record_id, actorUserId, "Data erasure request");
+  }
+
+  // Delete the child's trained ML model file (ml/models/{childId}.json)
+  // Required under DPDP §17 — the model encodes personal behavioral patterns.
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname  = path.dirname(__filename);
+    const modelPath  = path.join(__dirname, "..", "ml", "models", `${childId}.json`);
+    if (existsSync(modelPath)) {
+      unlinkSync(modelPath);
+      console.log(`[erasure] Deleted ML model for child ${childId}`);
+    }
+  } catch (err: any) {
+    // Non-fatal: model may not exist if sidecar was never run
+    console.warn(`[erasure] Could not delete ML model for child ${childId}:`, err.message);
   }
 
   // Cascade deletes handle related rows via FK ON DELETE CASCADE

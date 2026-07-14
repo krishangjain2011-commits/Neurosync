@@ -2,9 +2,10 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, mkdirSync, unlinkSync } from "fs";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
+import multer from "multer";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -41,6 +42,131 @@ import {
   extractEmbedding, cosineSimilarity, computeCentroids,
   predictTopN, EMBED_VERSION, MATCH_THRESHOLD,
 } from "./lib/embedder.js";
+
+// ── ML Sidecar client ─────────────────────────────────────────────────────────
+// Calls the Python FastAPI sidecar (ml/main.py) for real MFCC embeddings.
+// Falls back gracefully if the sidecar isn't running.
+
+const ML_SIDECAR_URL = process.env.ML_SIDECAR_URL ?? "http://localhost:8000";
+
+// ── Audio file storage (multer) ───────────────────────────────────────────────
+// Recordings are saved to uploads/recordings/<childId>/ on the server.
+// They are referenced in cue_events.media_ref and cue_library.media_ref.
+// purgeStaleCueMedia() hard-deletes files after 30 days (DPDP §8).
+
+const UPLOADS_DIR = process.env.UPLOADS_DIR ?? path.join(__dirname, "uploads");
+
+const audioStorage = (multer as any).diskStorage({
+  destination: (req: express.Request, _file: any, cb: Function) => {
+    const childId = req.params.id ?? req.params.childId ?? "unknown";
+    const dir = path.join(UPLOADS_DIR, "recordings", String(childId));
+    mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req: express.Request, file: any, cb: Function) => {
+    const ext = path.extname(file.originalname || "audio.webm") || ".webm";
+    cb(null, `${Date.now()}${ext}`);
+  },
+});
+
+const uploadAudio = (multer as any)({
+  storage: audioStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+  fileFilter: (_req: express.Request, file: any, cb: Function) => {
+    if (file.mimetype.startsWith("audio/") || file.mimetype === "application/octet-stream") {
+      cb(null, true);
+    } else {
+      cb(new Error("Only audio files are accepted"));
+    }
+  },
+});
+
+/**
+ * Embed an audio file that is already on disk by streaming it to the ML sidecar.
+ * Falls back to JS embedder on base64 data when the file path is not available.
+ */
+async function mlEmbedFile(filePath: string): Promise<number[] | null> {
+  try {
+    const fileBuffer = readFileSync(filePath);
+    const boundary   = `----NeuroBoundary${Date.now()}`;
+    const filename   = path.basename(filePath);
+    const body = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="${filename}"\r\nContent-Type: audio/webm\r\n\r\n`),
+      fileBuffer,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const res = await fetch(`${ML_SIDECAR_URL}/embed`, {
+      method:  "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+      body:    new Uint8Array(body),
+      signal:  AbortSignal.timeout(30000),
+    });
+    if (!res.ok) {
+      console.warn(`[mlEmbedFile] sidecar returned ${res.status} for ${filename}`);
+      return null;
+    }
+    const data: any = await res.json();
+    return Array.isArray(data.vector) ? data.vector : null;
+  } catch (err) {
+    console.warn(`[mlEmbedFile] failed for ${filePath}:`, err);
+    return null;
+  }
+}
+
+async function mlEmbed(base64Data: string): Promise<number[] | null> {
+  try {
+    // Convert base64 to Buffer, then to a Blob-compatible form for the multipart request
+    const audioBuffer = Buffer.from(base64Data, "base64");
+    const boundary = `----NeuroBoundary${Date.now()}`;
+    const body = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="clip.webm"\r\nContent-Type: audio/webm\r\n\r\n`),
+      audioBuffer,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const res = await fetch(`${ML_SIDECAR_URL}/embed`, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+      body,
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    return Array.isArray(data.vector) ? data.vector : null;
+  } catch {
+    return null; // sidecar not running — caller will fall back
+  }
+}
+
+async function mlRetrain(childId: number, trainingData: { embeddingVector: number[]; meaningId: string }[]): Promise<boolean> {
+  try {
+    const res = await fetch(`${ML_SIDECAR_URL}/retrain`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId: String(childId), trainingData }),
+      signal: AbortSignal.timeout(120000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function mlPredict(childId: number, vector: number[], meanings: { id: string; title: string }[]): Promise<{ topMeaningId: string; topConfidence: number; alternatives: any[] } | null> {
+  try {
+    const res = await fetch(`${ML_SIDECAR_URL}/predict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId: String(childId), embeddingVector: vector, meanings }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    if (data.error) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
 
 purgeExpiredTokens();
 setInterval(purgeExpiredTokens, 1000 * 60 * 60); // hourly
@@ -83,6 +209,12 @@ function setTokenCookie(res: express.Response, token: string): void {
 
 function clearTokenCookie(res: express.Response): void {
   res.setHeader("Set-Cookie", "neurosync_token=; HttpOnly; Path=/; Max-Age=0");
+}
+
+function parseRouteNumber(params: Record<string, string | string[] | undefined>, key: string): number {
+  const value = params[key];
+  const raw = Array.isArray(value) ? value[0] ?? "" : value ?? "";
+  return parseInt(raw, 10);
 }
 
 async function startServer() {
@@ -212,7 +344,7 @@ async function startServer() {
   });
 
   app.put("/api/children/:id/onboarding", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     assertConsent(childId);
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
@@ -225,7 +357,7 @@ async function startServer() {
 
   // Right to erasure (DPDP §17)
   app.delete("/api/children/:id/data", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get(sessionUser.userId, childId);
@@ -239,7 +371,7 @@ async function startServer() {
   // ── PROGRESS ──────────────────────────────────────────────────────────────
 
   app.get("/api/children/:id/progress", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
@@ -250,7 +382,7 @@ async function startServer() {
   });
 
   app.post("/api/children/:id/progress", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     assertConsent(childId);
     const { sessionUser } = req as any;
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
@@ -270,7 +402,7 @@ async function startServer() {
   // ── DIET PLANS ────────────────────────────────────────────────────────────
 
   app.get("/api/children/:id/diet", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
@@ -281,7 +413,7 @@ async function startServer() {
   });
 
   app.post("/api/children/:id/diet", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     assertConsent(childId);
     const { sessionUser } = req as any;
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
@@ -299,7 +431,7 @@ async function startServer() {
   // ── THERAPY SCHEDULES ─────────────────────────────────────────────────────
 
   app.get("/api/children/:id/therapy", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
@@ -310,7 +442,7 @@ async function startServer() {
   });
 
   app.post("/api/children/:id/therapy", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     assertConsent(childId);
     const { sessionUser } = req as any;
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
@@ -328,7 +460,7 @@ async function startServer() {
   // ── CONSENT MANAGEMENT ────────────────────────────────────────────────────
 
   app.post("/api/children/:id/consent/revoke", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
     const child: any = db.prepare("SELECT consent_record_id FROM children_profiles WHERE id=?").get(childId);
     if (!child) return res.status(404).json({ error: "Child not found" });
@@ -498,9 +630,9 @@ async function startServer() {
   });
 
   // ── CUE INTERPRETER ────────────────────────────────────────────────────────
-  // DOWNLOAD full local model — all embeddings + labels for client-side matching
+  // DOWNLOAD full local model — all embeddings + labels for on-device IndexedDB matching
   app.get("/api/children/:id/cues/model", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
@@ -530,151 +662,332 @@ async function startServer() {
       cueCount:     model.length,
       trained:      model.length >= 6,
       model,
-      centroids,      // pre-computed centroids for faster local matching
-      embedVersion:   EMBED_VERSION,
-      matchThreshold: MATCH_THRESHOLD,
-      exportedAt:     new Date().toISOString(),
+      centroids,        // pre-computed centroids for faster on-device IndexedDB matching
+      embedVersion:     EMBED_VERSION,
+      matchThreshold:   MATCH_THRESHOLD,
+      exportedAt:       new Date().toISOString(),
     });
   });
 
   // GET cue library for a child
   app.get("/api/children/:id/cues", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
 
     const cues = db.prepare(
-      `SELECT id, label, media_type, confirmed_count, created_at, updated_at
+      `SELECT id, label, media_type, media_ref, confirmed_count, created_at, updated_at
        FROM cue_library WHERE child_id=? ORDER BY confirmed_count DESC, created_at DESC`
     ).all(childId);
     res.json(cues);
   });
 
-  // TEACH MODE — save a new labelled cue
-  app.post("/api/children/:id/cues/teach", authenticate, async (req, res) => {
-    const childId = parseInt(req.params.id, 10);
-    const { sessionUser } = req as any;
-    const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
-      .get(sessionUser.userId, childId);
+  // SERVE stored audio clips — GET /api/children/:id/cues/audio/:filename
+  app.get("/api/children/:id/cues/audio/:filename", authenticate, (req, res) => {
+    const childId = parseRouteNumber(req.params, "id");
+    const access  = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+      .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
-
-    const { label, mediaType, mediaData } = req.body;
-    if (!label?.trim()) return res.status(400).json({ error: "label required" });
-    if (!mediaData)      return res.status(400).json({ error: "mediaData (base64) required" });
-
-    const mtype: "audio" | "video" = mediaType === "video" ? "video" : "audio";
-    const embedding = extractEmbedding(mediaData, mtype);
-
-    const info = db.prepare(
-      `INSERT INTO cue_library
-         (child_id, label, media_type, embedding_vector, created_by_user_id)
-       VALUES (?,?,?,?,?)`
-    ).run(childId, label.trim(), mediaType ?? "audio", JSON.stringify(embedding), sessionUser.userId);
-
-    res.json({ id: info.lastInsertRowid, label: label.trim(), message: "Cue saved to library" });
+    const filename = (Array.isArray(req.params.filename) ? req.params.filename[0] : req.params.filename).replace(/[^a-zA-Z0-9._-]/g, "");
+    const filePath = path.join(UPLOADS_DIR, "recordings", String(childId), filename);
+    if (!existsSync(filePath)) return res.status(404).json({ error: "File not found" });
+    res.setHeader("Content-Type", "audio/webm");
+    res.setHeader("Accept-Ranges", "bytes");
+    res.sendFile(filePath);
   });
 
-  // RECOGNIZE MODE — match a clip against the child's library
-  app.post("/api/children/:id/cues/recognize", authenticate, async (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+  // ── TEACH MODE — multipart file OR base64 body ───────────────────────────────
+  app.post("/api/children/:id/cues/teach",
+    authenticate,
+    (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      req.is("multipart/form-data") ? uploadAudio.single("audio")(req, res, next) : next();
+    },
+    async (req: any, res: express.Response) => {
+      const childId = parseRouteNumber(req.params, "id");
+      const { sessionUser } = req as any;
+      const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+        .get(sessionUser.userId, childId);
+      if (!access) return res.status(403).json({ error: "No access" });
+
+      const label    = (req.body.label ?? "").trim();
+      const mediaType = req.body.mediaType ?? "audio";
+      if (!label) return res.status(400).json({ error: "label required" });
+
+      const uploadedFile: Express.Multer.File | undefined = req.file;
+      const mediaData: string | undefined = req.body.mediaData;
+      if (!uploadedFile && !mediaData) {
+        return res.status(400).json({ error: "audio file or mediaData (base64) required" });
+      }
+
+      const mediaRef = uploadedFile ? uploadedFile.path : null;
+      const info = db.prepare(
+        `INSERT INTO cue_library (child_id, label, media_type, media_ref, created_by_user_id)
+         VALUES (?,?,?,?,?)`
+      ).run(childId, label, mediaType, mediaRef, sessionUser.userId);
+      const cueId = info.lastInsertRowid as number;
+
+      res.json({ id: cueId, label, message: "Cue saved — embedding in progress", embeddingSource: "pending" });
+
+      setImmediate(async () => {
+        try {
+          let embedding: number[] | null = null;
+          let embeddingModel = "js-fallback";
+          if (uploadedFile) {
+            embedding = await mlEmbedFile(uploadedFile.path);
+            if (embedding) embeddingModel = "python-mfcc";
+          }
+          if (!embedding && mediaData) {
+            embedding = await mlEmbed(mediaData);
+            if (embedding) { embeddingModel = "python-mfcc"; }
+            else { embedding = extractEmbedding(mediaData, mediaType === "video" ? "video" : "audio"); }
+          }
+          if (!embedding || embedding.length === 0) return;
+          db.prepare("UPDATE cue_library SET embedding_vector=?, updated_at=datetime('now') WHERE id=?")
+            .run(JSON.stringify(embedding), cueId);
+          console.log(`[teach] cue ${cueId} "${label}" embedded via ${embeddingModel}, dims=${embedding.length}`);
+          const allCues: any[] = db.prepare(
+            "SELECT label, embedding_vector FROM cue_library WHERE child_id=? AND embedding_vector IS NOT NULL"
+          ).all(childId) as any[];
+          if (allCues.length >= 2) {
+            await mlRetrain(childId, allCues.map((c: any) => ({
+              embeddingVector: JSON.parse(c.embedding_vector), meaningId: c.label,
+            })));
+          }
+          console.log(`[teach] ${embeddingModel} embedding stored for cue ${cueId}`);
+        } catch (err) { console.error(`[teach] async embed failed cue ${cueId}:`, err); }
+      });
+    }
+  );
+
+  // ── RECORD MODE (two-step, step 1) — save audio, fire async embed ───────────
+  app.post("/api/children/:id/cues/record",
+    authenticate,
+    (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      req.is("multipart/form-data") ? uploadAudio.single("audio")(req, res, next) : next();
+    },
+    async (req: any, res: express.Response) => {
+      const childId = parseRouteNumber(req.params, "id");
+      const { sessionUser } = req as any;
+      const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+        .get(sessionUser.userId, childId);
+      if (!access) return res.status(403).json({ error: "No access" });
+
+      const uploadedFile: Express.Multer.File | undefined = req.file;
+      const mediaData: string | undefined = req.body.mediaData;
+      if (!uploadedFile && !mediaData) {
+        return res.status(400).json({ error: "audio file or mediaData (base64) required" });
+      }
+
+      const mediaRef   = uploadedFile ? uploadedFile.path : null;
+      const durationMs = req.body.audioDurationMs ? Number(req.body.audioDurationMs) : null;
+
+      const eventInfo = db.prepare(
+        "INSERT INTO cue_events (child_id, media_ref, audio_duration_ms) VALUES (?,?,?)"
+      ).run(childId, mediaRef, durationMs);
+      const eventId = eventInfo.lastInsertRowid as number;
+
+      res.json({ recordingEventId: eventId, status: "recorded", mediaRef });
+
+      setImmediate(async () => {
+        try {
+          let embedding: number[] | null = null;
+          let embeddingModel = "js-fallback";
+          if (uploadedFile) {
+            embedding = await mlEmbedFile(uploadedFile.path);
+            if (embedding) embeddingModel = "python-mfcc";
+          }
+          if (!embedding && mediaData) {
+            embedding = await mlEmbed(mediaData);
+            if (embedding) embeddingModel = "python-mfcc";
+            else embedding = extractEmbedding(mediaData, "audio");
+          }
+          if (embedding && embedding.length > 0) {
+            db.prepare("UPDATE cue_events SET embedding_vector=?, embedding_model=? WHERE id=?")
+              .run(JSON.stringify(embedding), embeddingModel, eventId);
+            console.log(`[record] ${embeddingModel} embedding stored for event ${eventId}`);
+          }
+        } catch (err) { console.error(`[record] async embed failed event ${eventId}:`, err); }
+      });
+    }
+  );
+
+  // ── PREDICT MODE (two-step, step 2) — match stored embedding ─────────────────
+  app.post("/api/children/:id/cues/predict", authenticate, async (req, res) => {
+    const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get(sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
 
-    const { mediaData, mediaType } = req.body;
-    if (!mediaData) return res.status(400).json({ error: "mediaData (base64) required" });
+    const { recordingEventId } = req.body;
+    if (!recordingEventId) return res.status(400).json({ error: "recordingEventId required" });
 
-    const qmtype: "audio" | "video" = mediaType === "video" ? "video" : "audio";
-    const queryVec = extractEmbedding(mediaData, qmtype);
+    const event: any = db.prepare(
+      "SELECT id, embedding_vector, embedding_model FROM cue_events WHERE id=? AND child_id=?"
+    ).get(recordingEventId, childId);
+    if (!event) return res.status(404).json({ error: "Recording event not found" });
+    if (!event.embedding_vector) {
+      return res.status(422).json({ error: "Embedding not ready yet — retry in a moment.", status: "pending" });
+    }
 
-    // Load all cues for this child that have embeddings
     const cues: any[] = db.prepare(
       "SELECT id, label, embedding_vector, confirmed_count FROM cue_library WHERE child_id=? AND embedding_vector IS NOT NULL"
     ).all(childId) as any[];
+    if (cues.length === 0) return res.json({ matched: false, eventId: recordingEventId, closestCues: [] });
 
-    if (cues.length === 0) {
-      const eventInfo = db.prepare("INSERT INTO cue_events (child_id) VALUES (?)").run(childId);
-      return res.json({ matched: false, eventId: eventInfo.lastInsertRowid, closestCues: [] });
-    }
-
-    // Build centroid map: label → mean of all vectors with that label
-    // (multiple teach examples per label improve accuracy via nearest-centroid)
-    const examples = cues.map((c: any) => ({
-      label:  c.label,
-      vector: JSON.parse(c.embedding_vector) as number[],
-      id:     c.id,
-      weight: c.confirmed_count as number,
-    }));
-    const centroids = computeCentroids(examples);
-
-    // Nearest-centroid + softmax confidence (ported from Copy's PrototypeClassifier)
+    const queryVec: number[] = JSON.parse(event.embedding_vector);
+    const RAW_COSINE_THRESHOLD = 0.40;
+    const examples  = cues.map((c: any) => ({ label: c.label, vector: JSON.parse(c.embedding_vector) as number[], id: c.id, weight: c.confirmed_count as number }));
+    const centroids  = computeCentroids(examples);
     const topResults = predictTopN(queryVec, centroids, 3);
 
-    if (topResults.length > 0 && topResults[0].confidence >= MATCH_THRESHOLD) {
-      const best = topResults[0];
-      // Find the actual cue row with the highest confirmed_count for this label
-      const bestCue = cues
-        .filter((c: any) => c.label === best.label)
-        .sort((a: any, b: any) => b.confirmed_count - a.confirmed_count)[0];
+    const isMatch = topResults.length > 0 && (
+      topResults[0].confidence >= MATCH_THRESHOLD ||
+      topResults[0].score     >= RAW_COSINE_THRESHOLD
+    );
 
-      db.prepare(
-        `INSERT INTO cue_events (child_id, matched_cue_id, match_confidence) VALUES (?,?,?)`
-      ).run(childId, bestCue.id, best.score);
-
+    if (isMatch) {
+      const best    = topResults[0];
+      const bestCue = cues.filter((c: any) => c.label === best.label).sort((a: any, b: any) => b.confirmed_count - a.confirmed_count)[0];
+      db.prepare("UPDATE cue_events SET matched_cue_id=?, match_confidence=? WHERE id=?")
+        .run(bestCue.id, best.score, recordingEventId);
       db.prepare("UPDATE cue_library SET confirmed_count = confirmed_count + 1, updated_at = datetime('now') WHERE id=?")
         .run(bestCue.id);
-
-      return res.json({
-        matched:    true,
-        label:      best.label,
-        confidence: Math.round(best.confidence * 100),
-        score:      Math.round(best.score * 100),
-        cueId:      bestCue.id,
-        embedVersion: EMBED_VERSION,
-      });
+      const displayConfidence = Math.round(Math.max(best.confidence, best.score) * 100);
+      return res.json({ matched: true, label: best.label, confidence: displayConfidence, score: Math.round(best.score * 100), cueId: bestCue.id, eventId: recordingEventId, source: event.embedding_model ?? "unknown" });
     }
 
-    // No confident match — return ranked alternatives and create pending event
     const ranked = topResults.map(r => {
-      const cue = cues
-        .filter((c: any) => c.label === r.label)
-        .sort((a: any, b: any) => b.confirmed_count - a.confirmed_count)[0];
+      const cue = cues.filter((c: any) => c.label === r.label).sort((a: any, b: any) => b.confirmed_count - a.confirmed_count)[0];
       return { id: cue?.id, label: r.label, score: r.score, confidence: r.confidence };
     });
-
-    const eventInfo = db.prepare("INSERT INTO cue_events (child_id) VALUES (?)").run(childId);
-
-    res.json({ matched: false, eventId: eventInfo.lastInsertRowid, closestCues: ranked });
+    res.json({ matched: false, eventId: recordingEventId, closestCues: ranked });
   });
 
-  // NEW-SIGNAL MODE — AI interprets an unmatched clip
+  // ── RECOGNIZE MODE — multipart file OR base64, synchronous single-step ───────
+  // Saves audio to disk, embeds inline (Python sidecar or JS fallback),
+  // matches against library, returns result immediately.
+  app.post("/api/children/:id/cues/recognize",
+    authenticate,
+    (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      req.is("multipart/form-data") ? uploadAudio.single("audio")(req, res, next) : next();
+    },
+    async (req: any, res: express.Response) => {
+      const childId = parseRouteNumber(req.params, "id");
+      const { sessionUser } = req as any;
+      const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+        .get(sessionUser.userId, childId);
+      if (!access) return res.status(403).json({ error: "No access" });
+
+      const uploadedFile: Express.Multer.File | undefined = req.file;
+      const mediaData: string | undefined = req.body.mediaData;
+      const mediaType: string = req.body.mediaType ?? "audio";
+
+      if (!uploadedFile && !mediaData) {
+        return res.status(400).json({ error: "audio file or mediaData (base64) required" });
+      }
+
+      const mediaRef = uploadedFile ? uploadedFile.path : null;
+
+      const cues: any[] = db.prepare(
+        "SELECT id, label, embedding_vector, confirmed_count FROM cue_library WHERE child_id=? AND embedding_vector IS NOT NULL"
+      ).all(childId) as any[];
+
+      if (cues.length === 0) {
+        const evInfo = db.prepare(
+          "INSERT INTO cue_events (child_id, media_ref) VALUES (?,?)"
+        ).run(childId, mediaRef);
+        return res.json({ matched: false, eventId: evInfo.lastInsertRowid, closestCues: [] });
+      }
+
+      // Embed synchronously — try disk file first (real MFCC), then base64, then JS fallback
+      let queryVec: number[] | null = null;
+      let embModel = "js-fallback";
+
+      if (uploadedFile) {
+        queryVec = await mlEmbedFile(uploadedFile.path);
+        if (queryVec) { embModel = "python-mfcc"; console.log(`[recognize] python-mfcc embed OK, dims=${queryVec.length}`); }
+        else console.warn("[recognize] mlEmbedFile failed, trying base64 sidecar");
+      }
+      if (!queryVec && mediaData) {
+        queryVec = await mlEmbed(mediaData);
+        if (queryVec) { embModel = "python-mfcc"; console.log(`[recognize] python-mfcc base64 embed OK, dims=${queryVec.length}`); }
+        else console.warn("[recognize] mlEmbed base64 failed, falling back to JS");
+      }
+      if (!queryVec && mediaData) {
+        queryVec = extractEmbedding(mediaData, mediaType === "video" ? "video" : "audio");
+        embModel = "js-fallback";
+        console.warn(`[recognize] using JS fallback embedder, dims=${queryVec.length}`);
+      }
+      if (!queryVec || queryVec.length === 0) {
+        return res.status(422).json({ error: "Could not extract audio embedding. Try a longer recording." });
+      }
+
+      if (!queryVec) console.warn("[recognize] sidecar unavailable, using JS embedder");
+
+      // Nearest-centroid + softmax matching
+      // Dual criteria: pass if softmax confidence OR raw cosine similarity is above threshold
+      const RAW_COSINE_THRESHOLD = 0.40; // raw cosine fallback threshold
+      const examples  = cues.map((c: any) => ({ label: c.label, vector: JSON.parse(c.embedding_vector) as number[], id: c.id, weight: c.confirmed_count as number }));
+      const centroids  = computeCentroids(examples);
+      const topResults = predictTopN(queryVec, centroids, 3);
+
+      const isMatch = topResults.length > 0 && (
+        topResults[0].confidence >= MATCH_THRESHOLD ||
+        topResults[0].score     >= RAW_COSINE_THRESHOLD
+      );
+
+      console.log(`[recognize] source=${embModel} top=${topResults[0]?.label} conf=${topResults[0]?.confidence?.toFixed(3)} cosine=${topResults[0]?.score?.toFixed(3)} matched=${isMatch}`);
+
+      // Dimension mismatch warning — JS fallback (128-dim) vs Python sidecar (124-dim)
+      const queryDims = queryVec.length;
+      const libDims   = cues[0] ? JSON.parse(cues[0].embedding_vector).length : queryDims;
+      if (queryDims !== libDims) {
+        console.warn(`[recognize] DIMENSION MISMATCH: query=${queryDims} vs library=${libDims}. Re-teach cues with sidecar running for best accuracy.`);
+      }
+
+      if (isMatch) {
+        const best    = topResults[0];
+        const bestCue = cues.filter((c: any) => c.label === best.label).sort((a: any, b: any) => b.confirmed_count - a.confirmed_count)[0];
+        db.prepare(
+          "INSERT INTO cue_events (child_id, media_ref, matched_cue_id, match_confidence, embedding_vector, embedding_model) VALUES (?,?,?,?,?,?)"
+        ).run(childId, mediaRef, bestCue.id, best.score, JSON.stringify(queryVec), embModel);
+        db.prepare("UPDATE cue_library SET confirmed_count = confirmed_count + 1, updated_at = datetime('now') WHERE id=?")
+          .run(bestCue.id);
+        // Report confidence as the higher of the two scores for display
+        const displayConfidence = Math.round(Math.max(best.confidence, best.score) * 100);
+        return res.json({ matched: true, label: best.label, confidence: displayConfidence, score: Math.round(best.score * 100), cueId: bestCue.id, source: embModel });
+      }
+
+      const ranked = topResults.map(r => {
+        const cue = cues.filter((c: any) => c.label === r.label).sort((a: any, b: any) => b.confirmed_count - a.confirmed_count)[0];
+        return { id: cue?.id, label: r.label, score: r.score, confidence: r.confidence };
+      });
+      const evInfo = db.prepare(
+        "INSERT INTO cue_events (child_id, media_ref, embedding_vector, embedding_model) VALUES (?,?,?,?)"
+      ).run(childId, mediaRef, JSON.stringify(queryVec), embModel);
+      res.json({ matched: false, eventId: evInfo.lastInsertRowid, closestCues: ranked });
+    }
+  );
+
+  // NEW-SIGNAL MODE — AI interprets an unmatched clip using text-only AI (Groq)
+  // No Gemini, no multimodal — uses generateStructured() with child profile context.
   app.post("/api/children/:id/cues/interpret", authenticate, async (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get(sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
 
     const { eventId, mediaDescription } = req.body;
-    // mediaDescription: caregiver's brief text description of what they heard/saw
-    // (used when full audio analysis isn't available from the model)
 
     const child: any = db.prepare("SELECT onboarding_data FROM children_profiles WHERE id=?").get(childId);
     const profile = child?.onboarding_data ? JSON.parse(child.onboarding_data) : {};
 
-    // Pull previously confirmed cues as context
     const confirmedCues: any[] = db.prepare(
       "SELECT label FROM cue_library WHERE child_id=? ORDER BY confirmed_count DESC LIMIT 10"
     ).all(childId) as any[];
-
-    const CUE_SYSTEM =
-      "You are interpreting a short recording of a child's sound or movement to help a caregiver " +
-      "understand what they may be communicating. Offer 5 to 6 distinct, plausible interpretations " +
-      "grounded in the child's known profile. Never state a single definitive interpretation as fact, " +
-      "never offer a medical or diagnostic conclusion, and always frame results as possibilities for " +
-      "the caregiver to judge against their own knowledge of the child.";
 
     const prompt =
       `Child profile:
@@ -682,72 +995,106 @@ async function startServer() {
 - Age: ${profile.childAge ?? "unknown"}
 - Diagnoses: ${profile.diagnoses?.join(", ") || "Not specified"}
 - Known sensory triggers: ${profile.sensoryTriggers?.join(", ") || "None noted"}
-- Previously confirmed communication cues for this child: ${confirmedCues.map((c: any) => `"${c.label}"`).join(", ") || "None yet"}
+- Previously confirmed communication cues: ${confirmedCues.map((c: any) => `"${c.label}"`).join(", ") || "None yet"}
+${mediaDescription ? `\nCaregiver's description of what they observed: "${mediaDescription}"` : ""}
 
-The caregiver has recorded a short clip. Their description: "${mediaDescription || "no description provided"}"
-
+You are helping a caregiver understand what a child with neurodevelopmental needs may be communicating.
 Provide exactly 6 distinct, plausible interpretations of what this child may be communicating.
-Return as JSON array of 6 strings, ranked by likelihood, in plain caregiver-facing language.
-Example format: ["may be signaling hunger", "may indicate sensory overload from noise", ...]
+Never state a single definitive interpretation as fact. Never offer a medical or diagnostic conclusion.
+Frame all results as possibilities for the caregiver to judge against their own knowledge of the child.
+Return as a JSON array of 6 strings, ranked by likelihood.
+Example: ["may be signaling hunger", "may indicate sensory overload", ...]
 Return ONLY the JSON array, no other text.`;
 
     try {
-      const raw = await generateStructured(prompt);
       let interpretations: string[] = [];
       try {
-        const parsed = JSON.parse(raw);
+        const raw = await generateStructured(prompt);
+        const { result: repaired } = repairJson(raw, "/api/cues/interpret");
+        const parsed = JSON.parse(repaired);
         interpretations = Array.isArray(parsed) ? parsed.slice(0, 6) : Object.values(parsed).slice(0, 6) as string[];
       } catch {
-        interpretations = ["may be communicating a need", "may indicate discomfort", "may be seeking attention",
-          "may be signaling sensory overload", "may be expressing frustration", "may want a routine change"];
+        interpretations = [
+          "may be communicating a need",
+          "may indicate discomfort",
+          "may be seeking attention",
+          "may be signaling sensory overload",
+          "may be expressing frustration",
+          "may want a routine change",
+        ];
       }
 
-      // Update cue_event with AI interpretations
       if (eventId) {
         db.prepare("UPDATE cue_events SET ai_interpretations=? WHERE id=?")
           .run(JSON.stringify(interpretations), eventId);
       }
 
-      res.json({ interpretations, eventId });
+      res.json({ interpretations, eventId: eventId ?? null });
     } catch (err: any) {
+      console.error("[interpret]", err);
       res.status(500).json({ error: err.message });
     }
   });
 
-  // CONFIRM — caregiver picks an interpretation; saves to library
-  app.post("/api/children/:id/cues/confirm", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
-    const { sessionUser } = req as any;
-    const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
-      .get(sessionUser.userId, childId);
-    if (!access) return res.status(403).json({ error: "No access" });
+  // CONFIRM — caregiver picks a label; saves to library with async MFCC embedding
+  app.post("/api/children/:id/cues/confirm",
+    authenticate,
+    (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      req.is("multipart/form-data") ? uploadAudio.single("audio")(req, res, next) : next();
+    },
+    async (req: any, res: express.Response) => {
+      const childId = parseRouteNumber(req.params, "id");
+      const { sessionUser } = req as any;
+      const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+        .get(sessionUser.userId, childId);
+      if (!access) return res.status(403).json({ error: "No access" });
 
-    const { eventId, selectedLabel, mediaData, mediaType, saveToLibrary } = req.body;
-    if (!selectedLabel || typeof selectedLabel !== "string" || !selectedLabel.trim())
-      return res.status(400).json({ error: "selectedLabel required" });
+      const { eventId, selectedLabel, mediaData, mediaType, saveToLibrary } = req.body;
+      if (!selectedLabel?.trim()) return res.status(400).json({ error: "selectedLabel required" });
 
-    // Update the cue_event
-    if (eventId) {
-      db.prepare("UPDATE cue_events SET caregiver_selected_interpretation=? WHERE id=?")
-        .run(selectedLabel.trim(), eventId);
+      const uploadedFile: Express.Multer.File | undefined = req.file;
+      const mediaRef = uploadedFile ? uploadedFile.path : null;
+
+      if (eventId) {
+        db.prepare("UPDATE cue_events SET caregiver_selected_interpretation=? WHERE id=?")
+          .run(selectedLabel.trim(), eventId);
+      }
+
+      if (saveToLibrary !== false && (uploadedFile || mediaData)) {
+        const libInfo = db.prepare(
+          `INSERT INTO cue_library (child_id, label, media_type, media_ref, created_by_user_id)
+           VALUES (?,?,?,?,?)`
+        ).run(childId, selectedLabel.trim(), mediaType ?? "audio", mediaRef, sessionUser.userId);
+        const cueId = libInfo.lastInsertRowid as number;
+
+        setImmediate(async () => {
+          try {
+            let embedding: number[] | null = null;
+            let embeddingModel = "js-fallback";
+            if (uploadedFile) { embedding = await mlEmbedFile(uploadedFile.path); if (embedding) embeddingModel = "python-mfcc"; }
+            if (!embedding && mediaData) { embedding = await mlEmbed(mediaData); if (embedding) embeddingModel = "python-mfcc"; }
+            if (!embedding && mediaData) { embedding = extractEmbedding(mediaData, mediaType === "video" ? "video" : "audio"); }
+            if (embedding && embedding.length > 0) {
+              db.prepare("UPDATE cue_library SET embedding_vector=?, updated_at=datetime('now') WHERE id=?")
+                .run(JSON.stringify(embedding), cueId);
+              const allCues: any[] = db.prepare(
+                "SELECT label, embedding_vector FROM cue_library WHERE child_id=? AND embedding_vector IS NOT NULL"
+              ).all(childId) as any[];
+              if (allCues.length >= 2) {
+                await mlRetrain(childId, allCues.map((c: any) => ({ embeddingVector: JSON.parse(c.embedding_vector), meaningId: c.label })));
+              }
+            }
+          } catch (err) { console.error(`[confirm] async embed failed cue ${cueId}:`, err); }
+        });
+      }
+
+      res.json({ status: "confirmed", label: selectedLabel.trim() });
     }
-
-    // Optionally save as a new library entry
-    if (saveToLibrary !== false && mediaData) {
-      const cmtype: "audio" | "video" = mediaType === "video" ? "video" : "audio";
-      const embedding = extractEmbedding(mediaData, cmtype);
-      db.prepare(
-        `INSERT INTO cue_library (child_id, label, media_type, embedding_vector, created_by_user_id)
-         VALUES (?,?,?,?,?)`
-      ).run(childId, selectedLabel.trim(), cmtype, JSON.stringify(embedding), sessionUser.userId);
-    }
-
-    res.json({ status: "confirmed", label: selectedLabel.trim() });
-  });
+  );
 
   // ESCALATE — mark a cue_event as escalating
   app.post("/api/children/:id/cues/escalate", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
@@ -760,21 +1107,77 @@ Return ONLY the JSON array, no other text.`;
     res.json({ status: "escalated" });
   });
 
-  // DELETE a cue from library (individual)
+  // DELETE a cue from library — also removes stored audio file from disk
   app.delete("/api/children/:childId/cues/:cueId", authenticate, (req, res) => {
-    const childId = parseInt(req.params.childId, 10);
-    const cueId   = parseInt(req.params.cueId, 10);
-    const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+    const childId = parseRouteNumber(req.params, "childId");
+    const cueId   = parseRouteNumber(req.params, "cueId");
+    const access  = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
 
+    const cue: any = db.prepare("SELECT media_ref FROM cue_library WHERE id=? AND child_id=?")
+      .get(cueId, childId);
+    if (cue?.media_ref) {
+      try { if (existsSync(cue.media_ref)) unlinkSync(cue.media_ref); } catch {}
+    }
     db.prepare("DELETE FROM cue_library WHERE id=? AND child_id=?").run(cueId, childId);
     res.json({ status: "deleted" });
   });
 
+  // RE-EMBED — re-run Python MFCC embedding on all stored cue files for a child.
+  // Fixes dimension mismatches when cues were originally embedded via JS fallback.
+  app.post("/api/children/:id/cues/reembed", authenticate, async (req, res) => {
+    const childId = parseRouteNumber(req.params, "id");
+    const { sessionUser } = req as any;
+    const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+      .get(sessionUser.userId, childId);
+    if (!access) return res.status(403).json({ error: "No access" });
+
+    const cues: any[] = db.prepare(
+      "SELECT id, label, media_ref, embedding_vector FROM cue_library WHERE child_id=?"
+    ).all(childId) as any[];
+
+    let reembedded = 0, skipped = 0, failed = 0;
+
+    for (const cue of cues) {
+      try {
+        let newVec: number[] | null = null;
+        if (cue.media_ref && existsSync(cue.media_ref)) {
+          newVec = await mlEmbedFile(cue.media_ref);
+        }
+        if (newVec && newVec.length > 0) {
+          db.prepare("UPDATE cue_library SET embedding_vector=?, updated_at=datetime('now') WHERE id=?")
+            .run(JSON.stringify(newVec), cue.id);
+          reembedded++;
+          console.log(`[reembed] cue ${cue.id} "${cue.label}" → ${newVec.length}-dim python-mfcc`);
+        } else {
+          skipped++;
+          console.warn(`[reembed] cue ${cue.id} "${cue.label}" — no file or sidecar unavailable`);
+        }
+      } catch (err) {
+        failed++;
+        console.error(`[reembed] cue ${cue.id} failed:`, err);
+      }
+    }
+
+    // Retrain after re-embedding
+    if (reembedded > 0) {
+      const allCues: any[] = db.prepare(
+        "SELECT label, embedding_vector FROM cue_library WHERE child_id=? AND embedding_vector IS NOT NULL"
+      ).all(childId) as any[];
+      if (allCues.length >= 2) {
+        await mlRetrain(childId, allCues.map((c: any) => ({
+          embeddingVector: JSON.parse(c.embedding_vector), meaningId: c.label,
+        })));
+      }
+    }
+
+    res.json({ reembedded, skipped, failed, total: cues.length });
+  });
+
   // RECENT cue events (for history view)
   app.get("/api/children/:id/cue-events", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
@@ -817,7 +1220,7 @@ Return ONLY the JSON array, no other text.`;
 
   // POST /api/children/:id/handwriting — analyze an uploaded handwriting image
   app.post("/api/children/:id/handwriting", authenticate, async (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
 
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
@@ -855,36 +1258,44 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 }`;
 
     try {
-      // Use Gemini vision (multimodal) — Groq does not support image input
-      const { GoogleGenAI } = await import("@google/genai");
-      const geminiKey = process.env.GEMINI_API_KEY;
-      if (!geminiKey) {
+      // Use Groq vision (meta-llama/llama-4-scout-17b-16e-instruct) — same API key, no Gemini needed.
+      // Accepts base64-encoded images up to 4 MB via the image_url content part.
+      const groqKey = process.env.GROQ_API_KEY;
+      if (!groqKey) {
         return res.status(503).json({
-          error: "Handwriting analysis requires a Gemini API key. Add GEMINI_API_KEY to your .env file (free at aistudio.google.com).",
-          code: "GEMINI_KEY_MISSING",
+          error: "Handwriting analysis requires a Groq API key (GROQ_API_KEY in .env).",
+          code: "GROQ_KEY_MISSING",
         });
       }
 
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite";
-
-      // Strip data URL prefix if present
+      // Detect mime type from data-URL prefix or default to jpeg
+      const mimeMatch = imageData.match(/^data:(image\/[a-z]+);base64,/);
+      const mimeType  = mimeMatch ? mimeMatch[1] : "image/jpeg";
       const base64Clean = imageData.replace(/^data:image\/[a-z]+;base64,/, "");
 
-      const response = await ai.models.generateContent({
-        model,
-        contents: [
+      const { Groq: GroqClient } = await import("groq-sdk");
+      const client = new GroqClient({ apiKey: groqKey });
+
+      const completion = await client.chat.completions.create({
+        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        messages: [
           {
             role: "user",
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: "image/jpeg", data: base64Clean } },
-            ],
+            content: [
+              { type: "text", text: prompt },
+              {
+                type: "image_url",
+                image_url: { url: `data:${mimeType};base64,${base64Clean}` },
+              },
+            ] as any,
           },
         ],
+        temperature: 0.2,
+        max_tokens: 1024,
+        response_format: { type: "json_object" },
       });
 
-      const raw = response.text ?? "";
+      const raw = completion.choices[0]?.message?.content ?? "";
       const { result: repaired } = repairJson(raw, "/api/handwriting");
 
       let parsed: any = {};
@@ -943,8 +1354,8 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 
   // PATCH /api/children/:id/handwriting/:sampleId — caregiver confirms/corrects
   app.patch("/api/children/:id/handwriting/:sampleId", authenticate, (req, res) => {
-    const childId  = parseInt(req.params.id, 10);
-    const sampleId = parseInt(req.params.sampleId, 10);
+    const childId  = parseRouteNumber(req.params, "id");
+    const sampleId = parseRouteNumber(req.params, "sampleId");
     const { sessionUser } = req as any;
 
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
@@ -962,7 +1373,7 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 
   // GET /api/children/:id/handwriting — list past samples
   app.get("/api/children/:id/handwriting", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
@@ -984,8 +1395,8 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 
   // DELETE /api/children/:id/handwriting/:sampleId — individual erasure
   app.delete("/api/children/:id/handwriting/:sampleId", authenticate, (req, res) => {
-    const childId  = parseInt(req.params.id, 10);
-    const sampleId = parseInt(req.params.sampleId, 10);
+    const childId  = parseRouteNumber(req.params, "id");
+    const sampleId = parseRouteNumber(req.params, "sampleId");
     const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
       .get((req as any).sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
@@ -998,7 +1409,7 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 
   // Generate a full child report as structured JSON (parent prints / shares)
   app.get("/api/children/:id/report", authenticate, async (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
 
     // Check access
@@ -1062,7 +1473,7 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 
   // AI-generated narrative report summary
   app.post("/api/children/:id/report/narrative", authenticate, async (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
 
     const access = db.prepare(
@@ -1102,7 +1513,7 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 
   // Share child access with another user (worker) by email
   app.post("/api/children/:id/share", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "email required" });
@@ -1136,7 +1547,7 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 
   // Email report to a recipient
   app.post("/api/children/:id/report/email", authenticate, async (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
     const { recipientEmail, recipientName, narrative, reportData } = req.body;
 
@@ -1249,8 +1660,8 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 
   // Revoke access for a worker
   app.delete("/api/children/:id/share/:userId", authenticate, (req, res) => {
-    const childId  = parseInt(req.params.id, 10);
-    const targetId = parseInt(req.params.userId, 10);
+    const childId  = parseRouteNumber(req.params, "id");
+    const targetId = parseRouteNumber(req.params, "userId");
     const { sessionUser } = req as any;
 
     const ownerAccess = db.prepare(
@@ -1270,7 +1681,7 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 
   // List who has access to a child
   app.get("/api/children/:id/shares", authenticate, (req, res) => {
-    const childId = parseInt(req.params.id, 10);
+    const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
 
     const ownerAccess = db.prepare(

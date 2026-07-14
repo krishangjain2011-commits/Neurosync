@@ -47,3 +47,12 @@ desktop.ini
 # Temporary
 tmp/
 temp/
+
+# Uploaded audio/media files (runtime data, not source code)
+uploads/
+
+# Kiro IDE workspace files
+.kiro/
+
+# Python ML — venv and compiled files handled by ml/.gitignore
+# (models/*.json, __pycache__, .venv already excluded there)
