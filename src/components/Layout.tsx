@@ -172,7 +172,6 @@ export default function Layout() {
             {user?.role?.replace("_", " ")}
           </div>
         </div>
-        <SharedPoolToggle />
         <button
           onClick={handleLogout}
           style={{
