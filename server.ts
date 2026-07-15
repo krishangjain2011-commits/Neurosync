@@ -722,43 +722,54 @@ async function startServer() {
         return res.status(400).json({ error: "audio file or mediaData (base64) required" });
       }
 
+      // ── Embed SYNCHRONOUSLY before responding ─────────────────────────────
+      // On ephemeral hosts (Render free tier) the file may not survive
+      // past the current request if we defer to setImmediate.
+      let embedding: number[] | null = null;
+      let embeddingModel = "js-fallback";
+      try {
+        if (uploadedFile) {
+          embedding = await mlEmbedFile(uploadedFile.path);
+          if (embedding) embeddingModel = "python-mfcc";
+        }
+        if (!embedding && mediaData) {
+          embedding = await mlEmbed(mediaData);
+          if (embedding) embeddingModel = "python-mfcc";
+        }
+        // JS fallback — always produces a vector even without the sidecar
+        if (!embedding) {
+          const rawData = mediaData ?? (uploadedFile ? readFileSync(uploadedFile.path).toString("base64") : null);
+          if (rawData) {
+            embedding = extractEmbedding(rawData, "audio");
+            embeddingModel = "js-fallback";
+          }
+        }
+      } catch (err) {
+        console.warn(`[teach] embedding error for "${label}":`, err);
+      }
+
       const mediaRef = uploadedFile ? uploadedFile.path : null;
       const info = db.prepare(
-        `INSERT INTO cue_library (child_id, label, media_type, media_ref, created_by_user_id)
-         VALUES (?,?,?,?,?)`
-      ).run(childId, label, mediaType, mediaRef, sessionUser.userId);
+        `INSERT INTO cue_library (child_id, label, media_type, media_ref, embedding_vector, created_by_user_id)
+         VALUES (?,?,?,?,?,?)`
+      ).run(childId, label, mediaType, mediaRef, embedding ? JSON.stringify(embedding) : null, sessionUser.userId);
       const cueId = info.lastInsertRowid as number;
 
-      res.json({ id: cueId, label, message: "Cue saved — embedding in progress", embeddingSource: "pending" });
+      console.log(`[teach] cue ${cueId} "${label}" via ${embeddingModel}, dims=${embedding?.length ?? 0}`);
 
-      setImmediate(async () => {
-        try {
-          let embedding: number[] | null = null;
-          let embeddingModel = "js-fallback";
-          if (uploadedFile) {
-            embedding = await mlEmbedFile(uploadedFile.path);
-            if (embedding) embeddingModel = "python-mfcc";
-          }
-          if (!embedding && mediaData) {
-            embedding = await mlEmbed(mediaData);
-            if (embedding) { embeddingModel = "python-mfcc"; }
-            else { embedding = extractEmbedding(mediaData, mediaType === "video" ? "video" : "audio"); }
-          }
-          if (!embedding || embedding.length === 0) return;
-          db.prepare("UPDATE cue_library SET embedding_vector=?, updated_at=datetime('now') WHERE id=?")
-            .run(JSON.stringify(embedding), cueId);
-          console.log(`[teach] cue ${cueId} "${label}" embedded via ${embeddingModel}, dims=${embedding.length}`);
-          const allCues: any[] = db.prepare(
-            "SELECT label, embedding_vector FROM cue_library WHERE child_id=? AND embedding_vector IS NOT NULL"
-          ).all(childId) as any[];
-          if (allCues.length >= 2) {
-            await mlRetrain(childId, allCues.map((c: any) => ({
-              embeddingVector: JSON.parse(c.embedding_vector), meaningId: c.label,
-            })));
-          }
-          console.log(`[teach] ${embeddingModel} embedding stored for cue ${cueId}`);
-        } catch (err) { console.error(`[teach] async embed failed cue ${cueId}:`, err); }
-      });
+      // Retrain sidecar if we have enough cues
+      if (embedding) {
+        const allCues: any[] = db.prepare(
+          "SELECT label, embedding_vector FROM cue_library WHERE child_id=? AND embedding_vector IS NOT NULL"
+        ).all(childId) as any[];
+        if (allCues.length >= 2) {
+          mlRetrain(childId, allCues.map((c: any) => ({
+            embeddingVector: JSON.parse(c.embedding_vector), meaningId: c.label,
+          }))).catch(() => {}); // non-blocking, best-effort
+        }
+      }
+
+      res.json({ id: cueId, label, embeddingSource: embeddingModel, embedded: !!embedding });
     }
   );
 
@@ -1038,7 +1049,7 @@ Return ONLY the JSON array, no other text.`;
     }
   });
 
-  // CONFIRM — caregiver picks a label; saves to library with async MFCC embedding
+  // CONFIRM — caregiver picks a label; saves to library with synchronous embedding
   app.post("/api/children/:id/cues/confirm",
     authenticate,
     (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -1063,31 +1074,34 @@ Return ONLY the JSON array, no other text.`;
       }
 
       if (saveToLibrary !== false && (uploadedFile || mediaData)) {
-        const libInfo = db.prepare(
-          `INSERT INTO cue_library (child_id, label, media_type, media_ref, created_by_user_id)
-           VALUES (?,?,?,?,?)`
-        ).run(childId, selectedLabel.trim(), mediaType ?? "audio", mediaRef, sessionUser.userId);
-        const cueId = libInfo.lastInsertRowid as number;
+        // Embed synchronously — same reason as teach route (ephemeral disk on Render)
+        let embedding: number[] | null = null;
+        let embeddingModel = "js-fallback";
+        try {
+          if (uploadedFile) { embedding = await mlEmbedFile(uploadedFile.path); if (embedding) embeddingModel = "python-mfcc"; }
+          if (!embedding && mediaData) { embedding = await mlEmbed(mediaData); if (embedding) embeddingModel = "python-mfcc"; }
+          if (!embedding) {
+            const rawData = mediaData ?? (uploadedFile ? readFileSync(uploadedFile.path).toString("base64") : null);
+            if (rawData) embedding = extractEmbedding(rawData, mediaType === "video" ? "video" : "audio");
+          }
+        } catch (err) { console.warn(`[confirm] embedding error:`, err); }
 
-        setImmediate(async () => {
-          try {
-            let embedding: number[] | null = null;
-            let embeddingModel = "js-fallback";
-            if (uploadedFile) { embedding = await mlEmbedFile(uploadedFile.path); if (embedding) embeddingModel = "python-mfcc"; }
-            if (!embedding && mediaData) { embedding = await mlEmbed(mediaData); if (embedding) embeddingModel = "python-mfcc"; }
-            if (!embedding && mediaData) { embedding = extractEmbedding(mediaData, mediaType === "video" ? "video" : "audio"); }
-            if (embedding && embedding.length > 0) {
-              db.prepare("UPDATE cue_library SET embedding_vector=?, updated_at=datetime('now') WHERE id=?")
-                .run(JSON.stringify(embedding), cueId);
-              const allCues: any[] = db.prepare(
-                "SELECT label, embedding_vector FROM cue_library WHERE child_id=? AND embedding_vector IS NOT NULL"
-              ).all(childId) as any[];
-              if (allCues.length >= 2) {
-                await mlRetrain(childId, allCues.map((c: any) => ({ embeddingVector: JSON.parse(c.embedding_vector), meaningId: c.label })));
-              }
-            }
-          } catch (err) { console.error(`[confirm] async embed failed cue ${cueId}:`, err); }
-        });
+        const libInfo = db.prepare(
+          `INSERT INTO cue_library (child_id, label, media_type, media_ref, embedding_vector, created_by_user_id)
+           VALUES (?,?,?,?,?,?)`
+        ).run(childId, selectedLabel.trim(), mediaType ?? "audio", mediaRef, embedding ? JSON.stringify(embedding) : null, sessionUser.userId);
+        const cueId = libInfo.lastInsertRowid as number;
+        console.log(`[confirm] cue ${cueId} "${selectedLabel.trim()}" via ${embeddingModel}`);
+
+        if (embedding) {
+          const allCues: any[] = db.prepare(
+            "SELECT label, embedding_vector FROM cue_library WHERE child_id=? AND embedding_vector IS NOT NULL"
+          ).all(childId) as any[];
+          if (allCues.length >= 2) {
+            mlRetrain(childId, allCues.map((c: any) => ({ embeddingVector: JSON.parse(c.embedding_vector), meaningId: c.label })))
+              .catch(() => {}); // non-blocking
+          }
+        }
       }
 
       res.json({ status: "confirmed", label: selectedLabel.trim() });
