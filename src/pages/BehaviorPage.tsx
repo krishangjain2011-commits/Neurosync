@@ -43,8 +43,10 @@ function AudioRecorder({
 }) {
   const mediaRef   = useRef<MediaRecorder | null>(null);
   const chunksRef  = useRef<Blob[]>([]);
+  const fileRef    = useRef<HTMLInputElement>(null);
   const [recording, setRecording] = useState(false);
   const [audioURL,  setAudioURL]  = useState("");
+  const [fileName,  setFileName]  = useState("");
   const [error,     setError]     = useState("");
   const [duration,  setDuration]  = useState(0);
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -54,7 +56,6 @@ function AudioRecorder({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       chunksRef.current = [];
-      // Prefer audio/webm; fall back to whatever browser supports
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/webm")
@@ -67,6 +68,7 @@ function AudioRecorder({
         const blob = new Blob(chunksRef.current, { type: mimeType || "audio/webm" });
         const url  = URL.createObjectURL(blob);
         setAudioURL(url);
+        setFileName("");
         const reader = new FileReader();
         reader.onloadend = () => {
           const b64 = (reader.result as string).split(",")[1];
@@ -90,31 +92,87 @@ function AudioRecorder({
     setRecording(false);
   };
 
+  const handleFile = (file: File) => {
+    const ACCEPTED = ["audio/mpeg","audio/mp4","audio/wav","audio/ogg","audio/webm","audio/x-m4a","audio/aac","audio/flac","application/octet-stream"];
+    if (!file.type.startsWith("audio/") && !ACCEPTED.includes(file.type)) {
+      setError(`Unsupported format: ${file.type || file.name}. Use m4a, mp3, wav, ogg, or webm.`);
+      return;
+    }
+    setError("");
+    const url = URL.createObjectURL(file);
+    setAudioURL(url);
+    setFileName(file.name);
+    setDuration(0);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const b64 = (reader.result as string).split(",")[1];
+      onRecorded(file, b64);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const reset = () => {
     setAudioURL("");
+    setFileName("");
     setDuration(0);
     setError("");
+    if (fileRef.current) fileRef.current.value = "";
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.875rem" }}>
-      {/* Record button */}
-      <button
-        onClick={recording ? stopRec : startRec}
-        style={{
-          width: "80px", height: "80px", borderRadius: "50%", border: "none", cursor: "pointer",
-          background: recording
-            ? "linear-gradient(135deg, var(--red), #b83f3f)"
-            : "linear-gradient(135deg, var(--accent), var(--accent-dark, #6d28d9))",
-          color: "white", fontSize: "2rem", display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: recording ? "0 0 0 8px rgba(220,38,38,0.2)" : "0 4px 16px rgba(139,92,246,0.4)",
-          animation: recording ? "pulse-ring 1.5s infinite" : "none",
-          transition: "all 0.2s",
-        }}
-        aria-label={recording ? "Stop recording" : "Start recording"}
-      >
-        {recording ? "⏹" : "🎙️"}
-      </button>
+      {/* Record + Attach row */}
+      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+        {/* Record button */}
+        <button
+          onClick={recording ? stopRec : startRec}
+          style={{
+            width: "80px", height: "80px", borderRadius: "50%", border: "none", cursor: "pointer",
+            background: recording
+              ? "linear-gradient(135deg, var(--red), #b83f3f)"
+              : "linear-gradient(135deg, var(--accent), var(--accent-dark, #6d28d9))",
+            color: "white", fontSize: "2rem", display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: recording ? "0 0 0 8px rgba(220,38,38,0.2)" : "0 4px 16px rgba(139,92,246,0.4)",
+            animation: recording ? "pulse-ring 1.5s infinite" : "none",
+            transition: "all 0.2s",
+          }}
+          aria-label={recording ? "Stop recording" : "Start recording"}
+        >
+          {recording ? "⏹" : "🎙️"}
+        </button>
+
+        {/* Divider */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.2rem" }}>
+          <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)" }} />
+          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", fontWeight: 600 }}>OR</span>
+          <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)" }} />
+        </div>
+
+        {/* File attach button */}
+        <button
+          onClick={() => fileRef.current?.click()}
+          style={{
+            width: "80px", height: "80px", borderRadius: "50%", border: "2px dashed var(--border)",
+            cursor: "pointer", background: "var(--canvas)",
+            color: "var(--text-muted)", fontSize: "1.5rem",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "2px",
+            transition: "all 0.2s",
+          }}
+          aria-label="Attach audio file"
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)"; (e.currentTarget as HTMLElement).style.color = "var(--accent)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
+        >
+          📎
+          <span style={{ fontSize: "0.55rem", fontWeight: 600, letterSpacing: "0.02em" }}>ATTACH</span>
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="audio/*,.m4a,.mp3,.wav,.ogg,.webm,.aac,.flac"
+          style={{ display: "none" }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+        />
+      </div>
 
       {recording && (
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--red)", fontWeight: 600, fontSize: "0.85rem" }}>
@@ -125,7 +183,7 @@ function AudioRecorder({
 
       {!recording && !audioURL && (
         <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-muted)", textAlign: "center" }}>
-          Tap 🎙️ to start recording audio (5–15 sec recommended)
+          Record live (5–15 sec) or attach an existing audio file (m4a, mp3, wav, ogg, webm)
         </p>
       )}
 
@@ -133,8 +191,12 @@ function AudioRecorder({
         <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <audio src={audioURL} controls style={{ width: "100%", borderRadius: "8px" }} />
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>✅ Recording ready ({duration}s)</span>
-            <button onClick={reset} style={{ fontSize: "0.72rem", padding: "0.2rem 0.5rem", borderRadius: "5px", border: "1px solid var(--border)", backgroundColor: "var(--canvas)", cursor: "pointer", color: "var(--text-secondary)" }}>Re-record</button>
+            <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {fileName ? `📎 ${fileName}` : `✅ Recording ready${duration > 0 ? ` (${duration}s)` : ""}`}
+            </span>
+            <button onClick={reset} style={{ fontSize: "0.72rem", padding: "0.2rem 0.5rem", borderRadius: "5px", border: "1px solid var(--border)", backgroundColor: "var(--canvas)", cursor: "pointer", color: "var(--text-secondary)", flexShrink: 0 }}>
+              {fileName ? "Re-attach" : "Re-record"}
+            </button>
           </div>
         </div>
       )}
@@ -174,6 +236,7 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
   const [showEscalation, setShowEscalation] = useState(false);
   const [aiOptions, setAiOptions]           = useState<string[]>([]);
   const [syncingModel, setSyncingModel]     = useState(false);
+  const [sharedMatches, setSharedMatches]   = useState<{ clusterId: string; topLabel: string; score: number }[]>([]);
 
   const cueCount  = cueLibrary.length;
   const isTrained = cueCount >= MIN_CUES_FOR_TRAINING;
@@ -226,17 +289,18 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
     setAudioBlob(null); setAudioB64("");
     setMatchResult(null); setClosestCues([]); setEventId(null);
     setConfirmed(""); setCustomLabel(""); setMediaDesc(""); setError("");
-    setShowEscalation(false); setAiOptions([]);
+    setShowEscalation(false); setAiOptions([]); setSharedMatches([]);
   };
 
   // ── Teach — multipart upload ──────────────────────────────────────────────────
   const handleTeach = async () => {
     if (!audioBlob || !teachLabel.trim() || !childId) return;
     setLoading(true); setError("");
+    const labelToSave = teachLabel.trim();
     try {
       const formData = new FormData();
       formData.append("audio", audioBlob, "clip.webm");
-      formData.append("label", teachLabel.trim());
+      formData.append("label", labelToSave);
       formData.append("mediaType", "audio");
 
       const res = await fetch(`/api/children/${childId}/cues/teach`, {
@@ -251,6 +315,8 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
       setTeachLabel(""); setAudioBlob(null); setAudioB64("");
       await refreshData();
       await syncLocalModel();
+      // Contribute this newly-taught cue to the shared pool (always on)
+      handleContributePool(labelToSave);
       setMode("home");
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
@@ -307,6 +373,15 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
         setEventId(result.eventId ?? null);
         setClosestCues(result.closestCues ?? []);
         setMode("result_no_match");
+        // Check shared pool for cross-family suggestions (fire-and-forget)
+        if (result.closestCues?.length === 0 || cueCount === 0) {
+          const embedding = await extractBlobEmbedding(audioBlob).catch(() => null);
+          if (embedding) {
+            apiPost<any>("/api/shared-pool/match", { embeddingVector: embedding })
+              .then(r => { if (r.matches?.length) setSharedMatches(r.matches); })
+              .catch(() => {});
+          }
+        }
       }
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
@@ -336,8 +411,23 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
       setConfirmed(label);
       await refreshData();
       await syncLocalModel();
+      handleContributePool(label); // silently contribute to shared pool if opted in
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
+  };
+
+  // ── Contribute to shared pool (fires silently after confirm if user opted in) ─
+  const handleContributePool = async (label: string) => {
+    if (!childId || !audioBlob) return;
+    try {
+      const embedding = await extractBlobEmbedding(audioBlob);
+      if (embedding && embedding.some(v => v !== 0)) {
+        await apiPost(`/api/children/${childId}/cues/contribute-pool`, {
+          embeddingVector: embedding,
+          confirmedLabel: label,
+        });
+      }
+    } catch { /* non-fatal — shared pool contribution is best-effort */ }
   };
 
   // ── Escalate ──────────────────────────────────────────────────────────────────
@@ -447,16 +537,13 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
           <div style={{ fontSize: "0.73rem", color: "var(--text-muted)", lineHeight: 1.5 }}>Record audio of a known behaviour and label it</div>
         </button>
         <button
-          onClick={() => {
-            if (!isTrained) { setError(`Add at least ${remaining} more cue${remaining !== 1 ? "s" : ""} before interpreting`); return; }
-            setError(""); setMode("recognize");
-          }}
-          style={{ padding: "1.25rem", borderRadius: "12px", border: `1.5px solid ${isTrained ? "var(--accent)" : "var(--border)"}`, background: isTrained ? "linear-gradient(135deg, var(--accent-light), var(--surface))" : "var(--surface-2)", cursor: isTrained ? "pointer" : "not-allowed", textAlign: "left", opacity: isTrained ? 1 : 0.65 }}
+          onClick={() => { setError(""); setMode("recognize"); }}
+          style={{ padding: "1.25rem", borderRadius: "12px", border: "1.5px solid var(--accent)", background: "linear-gradient(135deg, var(--accent-light), var(--surface))", cursor: "pointer", textAlign: "left" }}
         >
           <div style={{ fontSize: "1.6rem", marginBottom: "0.4rem" }}>🔍</div>
-          <div style={{ fontSize: "0.9rem", fontWeight: 700, color: isTrained ? "var(--accent)" : "var(--text-muted)", marginBottom: "0.2rem" }}>Interpret Now</div>
+          <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--accent)", marginBottom: "0.2rem" }}>Interpret Now</div>
           <div style={{ fontSize: "0.73rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-            {isTrained ? "Record audio and match against trained model" : `Needs ${remaining} more cue${remaining !== 1 ? "s" : ""} to unlock`}
+            {isTrained ? "Match audio against trained model" : "Record audio — we'll match or help you label it"}
           </div>
         </button>
       </div>
@@ -692,6 +779,31 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
               Saving a label adds this audio clip to {childName}'s model for future recognition.
             </p>
           </div>
+
+          {/* Shared-pool suggestions — clearly marked as other families' data */}
+          {sharedMatches.length > 0 && (
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.875rem" }}>
+              <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
+                🌐 Other families' interpretations
+              </div>
+              <p style={{ margin: "0 0 0.6rem", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                These come from anonymised patterns across other opted-in families — not specific to {childName}. Use as a starting point only.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                {sharedMatches.map((m, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleConfirm(m.topLabel)}
+                    disabled={loading}
+                    style={{ padding: "0.55rem 0.875rem", borderRadius: "9px", textAlign: "left", border: "1.5px dashed var(--border)", backgroundColor: "var(--surface-2)", color: "var(--text-secondary)", fontSize: "0.82rem", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                  >
+                    <span>{m.topLabel}</span>
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>{Math.round(m.score * 100)}% similar</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Escalation */}

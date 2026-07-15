@@ -192,6 +192,36 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_hw_child    ON handwriting_samples(child_id);
   CREATE INDEX IF NOT EXISTS idx_hw_created  ON handwriting_samples(created_at);
+
+  -- ── Shared Cue Pool (opt-in, prototype) ─────────────────────────────────────
+  -- Only embedding vectors + caregiver-confirmed labels are stored here.
+  -- Raw audio is never pooled. Families opt in via a separate consent toggle.
+
+  CREATE TABLE IF NOT EXISTS shared_cue_pool (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    embedding_vector TEXT    NOT NULL,   -- JSON float array (never raw audio)
+    confirmed_label  TEXT    NOT NULL,   -- caregiver-confirmed meaning
+    child_id         INTEGER REFERENCES children_profiles(id) ON DELETE SET NULL,
+    contributed_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_shared_pool_label ON shared_cue_pool(confirmed_label);
+
+  -- Cluster centroids — computed periodically by /api/admin/shared-pool/recluster
+  CREATE TABLE IF NOT EXISTS shared_cue_clusters (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    cluster_id   TEXT    NOT NULL UNIQUE,  -- e.g. "cluster_0"
+    centroid     TEXT    NOT NULL,         -- JSON float array
+    top_labels   TEXT    NOT NULL,         -- JSON array of {label, count}
+    member_count INTEGER NOT NULL DEFAULT 0,
+    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- ── YouTube thumbnail cache ──────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS youtube_cache (
+    cache_key   TEXT    PRIMARY KEY,   -- sha256(subject+topic+difficulty)
+    results     TEXT    NOT NULL,      -- JSON array of video objects
+    fetched_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // ─── Safe migrations ─────────────────────────────────────────────────────────
@@ -238,6 +268,63 @@ if (!columnExists("users", "org_id")) {
     ins.run(u.id, u.email, u.password || u.password_hash || "", "parent", u.email);
   }
   console.log(`[DB] Migrated ${old.length} users.`);
+}
+
+// v4: shared pool consent flag on users — default ON (all users contribute anonymised embeddings)
+if (!columnExists("users", "shared_pool_consent")) {
+  db.exec(`ALTER TABLE users ADD COLUMN shared_pool_consent INTEGER NOT NULL DEFAULT 1`);
+  console.log("[DB] users: added shared_pool_consent (default ON)");
+}
+// Ensure existing users also have it enabled
+db.exec(`UPDATE users SET shared_pool_consent = 1 WHERE shared_pool_consent = 0`);
+
+// v5: rebuild cue_events so matched_cue_id has ON DELETE SET NULL.
+// SQLite cannot alter FK constraints — only way is to recreate the table.
+// We detect whether the fix is needed by checking the CREATE TABLE SQL stored in sqlite_master.
+{
+  const tblInfo: any = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='cue_events'"
+  ).get();
+  const needsRebuild = tblInfo?.sql && !tblInfo.sql.includes("ON DELETE SET NULL");
+  if (needsRebuild) {
+    console.log("[DB] Rebuilding cue_events to add ON DELETE SET NULL on matched_cue_id…");
+    db.exec(`
+      PRAGMA foreign_keys = OFF;
+
+      ALTER TABLE cue_events RENAME TO cue_events_old;
+
+      CREATE TABLE cue_events (
+        id                              INTEGER PRIMARY KEY AUTOINCREMENT,
+        child_id                        INTEGER NOT NULL REFERENCES children_profiles(id) ON DELETE CASCADE,
+        media_ref                       TEXT,
+        matched_cue_id                  INTEGER REFERENCES cue_library(id) ON DELETE SET NULL,
+        match_confidence                REAL,
+        ai_interpretations              TEXT,
+        caregiver_selected_interpretation TEXT,
+        escalated                       INTEGER NOT NULL DEFAULT 0,
+        escalated_at                    DATETIME,
+        created_at                      DATETIME DEFAULT CURRENT_TIMESTAMP,
+        embedding_vector                TEXT,
+        embedding_model                 TEXT,
+        audio_duration_ms               INTEGER
+      );
+
+      INSERT INTO cue_events
+        SELECT id, child_id, media_ref, matched_cue_id, match_confidence,
+               ai_interpretations, caregiver_selected_interpretation,
+               escalated, escalated_at, created_at,
+               embedding_vector, embedding_model, audio_duration_ms
+        FROM cue_events_old;
+
+      DROP TABLE cue_events_old;
+
+      CREATE INDEX IF NOT EXISTS idx_cue_events_child   ON cue_events(child_id);
+      CREATE INDEX IF NOT EXISTS idx_cue_events_created ON cue_events(created_at);
+
+      PRAGMA foreign_keys = ON;
+    `);
+    console.log("[DB] cue_events rebuild complete — ON DELETE SET NULL is now active.");
+  }
 }
 
 // Ensure at least one default org exists

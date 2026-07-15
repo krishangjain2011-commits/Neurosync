@@ -11,7 +11,6 @@ import BehaviorPage from "./pages/BehaviorPage";
 import DietPage from "./pages/DietPage";
 import TherapyPage from "./pages/TherapyPage";
 import HomeschoolPage from "./pages/HomeschoolPage";
-import VisualBoardPage from "./pages/VisualBoardPage";
 import EmergencyPage from "./pages/EmergencyPage";
 import InsightsPage from "./pages/InsightsPage";
 import ProgressPage from "./pages/ProgressPage";
@@ -74,7 +73,6 @@ function AppRoutes() {
         <Route path="diet"       element={<DietPage />} />
         <Route path="therapy"    element={<TherapyPage />} />
         <Route path="homeschool" element={<HomeschoolPage />} />
-        <Route path="visual"     element={<VisualBoardPage />} />
         <Route path="emergency"  element={<EmergencyPage />} />
         <Route path="progress"   element={<ProgressPage />} />
         <Route path="reports"    element={<ReportsPage />} />

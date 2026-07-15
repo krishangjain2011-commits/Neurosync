@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import { readFileSync, existsSync, mkdirSync, unlinkSync } from "fs";
@@ -224,6 +223,9 @@ async function startServer() {
   app.set("trust proxy", 1);
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: false }));
+
+  // ── HEALTH CHECK (unauthenticated — used by Render) ───────────────────────
+  app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
   // Auth rate limiting — brute-force protection
   const authLimiter = rateLimit({
@@ -1120,6 +1122,12 @@ Return ONLY the JSON array, no other text.`;
     if (cue?.media_ref) {
       try { if (existsSync(cue.media_ref)) unlinkSync(cue.media_ref); } catch {}
     }
+
+    // Null out matched_cue_id on any cue_events that reference this cue.
+    // The FK has no ON DELETE action so we must clear the reference first,
+    // otherwise SQLite throws "FOREIGN KEY constraint failed".
+    db.prepare("UPDATE cue_events SET matched_cue_id=NULL WHERE matched_cue_id=?").run(cueId);
+
     db.prepare("DELETE FROM cue_library WHERE id=? AND child_id=?").run(cueId, childId);
     res.json({ status: "deleted" });
   });
@@ -1697,9 +1705,231 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
     res.json(shares);
   });
 
+  // ── SHARED POOL — check clusters for unmatched clip ───────────────────────
+  // Called after a caregiver confirms a label. Contributions are always on —
+  // only the embedding vector + confirmed label are stored, never raw audio.
+  app.post("/api/children/:id/cues/contribute-pool", authenticate, async (req, res) => {
+    const childId = parseRouteNumber(req.params, "id");
+    const { sessionUser } = req as any;
+    const access = db.prepare("SELECT 1 FROM child_access WHERE user_id=? AND child_id=?")
+      .get(sessionUser.userId, childId);
+    if (!access) return res.status(403).json({ error: "No access" });
+
+    const { embeddingVector, confirmedLabel } = req.body;
+    if (!Array.isArray(embeddingVector) || !confirmedLabel?.trim()) {
+      return res.status(400).json({ error: "embeddingVector (array) and confirmedLabel required" });
+    }
+
+    db.prepare(
+      "INSERT INTO shared_cue_pool (embedding_vector, confirmed_label, child_id) VALUES (?,?,?)"
+    ).run(JSON.stringify(embeddingVector), confirmedLabel.trim(), childId);
+
+    res.json({ status: "contributed" });
+  });
+
+  // ── SHARED POOL — check clusters for unmatched clip ───────────────────────
+  // Returns top 3 shared-cluster suggestions for a given embedding vector.
+  // Clearly marked as "other families" — not the child's own cues.
+
+  app.post("/api/shared-pool/match", authenticate, (req, res) => {
+    const { embeddingVector } = req.body;
+    if (!Array.isArray(embeddingVector)) {
+      return res.status(400).json({ error: "embeddingVector required" });
+    }
+
+    const clusters: any[] = db.prepare(
+      "SELECT cluster_id, centroid, top_labels, member_count FROM shared_cue_clusters ORDER BY member_count DESC"
+    ).all() as any[];
+
+    if (clusters.length === 0) {
+      return res.json({ matches: [] });
+    }
+
+    // Cosine similarity against each cluster centroid
+    const scored = clusters.map((c: any) => {
+      const centroid: number[] = JSON.parse(c.centroid);
+      const query: number[]    = embeddingVector as number[];
+      const len = Math.min(centroid.length, query.length);
+      let dot = 0, magA = 0, magB = 0;
+      for (let i = 0; i < len; i++) {
+        dot  += query[i] * centroid[i];
+        magA += query[i] * query[i];
+        magB += centroid[i] * centroid[i];
+      }
+      const denom = Math.sqrt(magA) * Math.sqrt(magB);
+      const score = denom === 0 ? 0 : dot / denom;
+      const topLabels: { label: string; count: number }[] = JSON.parse(c.top_labels);
+      return { clusterId: c.cluster_id, score, topLabel: topLabels[0]?.label ?? "unknown", memberCount: c.member_count };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .filter(r => r.score > 0.25); // only surface reasonably similar clusters
+
+    res.json({ matches: scored });
+  });
+
+  // ── SHARED POOL — admin re-cluster (run periodically, not per-request) ────
+  // POST /api/admin/shared-pool/recluster
+  // Runs simple k-means over all pooled embeddings.
+  // Requires district_admin role to prevent abuse.
+
+  app.post("/api/admin/shared-pool/recluster", authenticate, requireRole("district_admin"), async (req, res) => {
+    const rows: any[] = db.prepare(
+      "SELECT id, embedding_vector, confirmed_label FROM shared_cue_pool"
+    ).all() as any[];
+
+    if (rows.length < 10) {
+      return res.json({ status: "skipped", reason: "insufficient_data", count: rows.length });
+    }
+
+    const K = Math.min(20, Math.floor(rows.length / 5));
+    const vectors = rows.map((r: any) => JSON.parse(r.embedding_vector) as number[]);
+    const labels  = rows.map((r: any) => r.confirmed_label as string);
+    const dims    = vectors[0].length;
+
+    // Initialize centroids using k-means++ seeding
+    const centroids: number[][] = [vectors[Math.floor(Math.random() * vectors.length)]];
+    while (centroids.length < K) {
+      const dists = vectors.map(v => {
+        const minDist = Math.min(...centroids.map(c => {
+          let d = 0;
+          for (let i = 0; i < dims; i++) d += (v[i] - c[i]) ** 2;
+          return d;
+        }));
+        return minDist;
+      });
+      const total = dists.reduce((s, d) => s + d, 0);
+      let rnd = Math.random() * total;
+      let chosen = 0;
+      for (let i = 0; i < dists.length; i++) { rnd -= dists[i]; if (rnd <= 0) { chosen = i; break; } }
+      centroids.push(vectors[chosen]);
+    }
+
+    // Run k-means for up to 50 iterations
+    let assignments = new Array(vectors.length).fill(0);
+    for (let iter = 0; iter < 50; iter++) {
+      let changed = false;
+      for (let i = 0; i < vectors.length; i++) {
+        let best = 0, bestDot = -Infinity;
+        for (let k = 0; k < K; k++) {
+          let dot = 0, magA = 0, magB = 0;
+          for (let d = 0; d < dims; d++) {
+            dot  += vectors[i][d] * centroids[k][d];
+            magA += vectors[i][d] ** 2;
+            magB += centroids[k][d] ** 2;
+          }
+          const sim = dot / (Math.sqrt(magA) * Math.sqrt(magB) || 1);
+          if (sim > bestDot) { bestDot = sim; best = k; }
+        }
+        if (assignments[i] !== best) { assignments[i] = best; changed = true; }
+      }
+      // Update centroids
+      for (let k = 0; k < K; k++) {
+        const members = vectors.filter((_, i) => assignments[i] === k);
+        if (members.length === 0) continue;
+        const newC = new Array(dims).fill(0);
+        for (const v of members) for (let d = 0; d < dims; d++) newC[d] += v[d];
+        for (let d = 0; d < dims; d++) newC[d] /= members.length;
+        centroids[k] = newC;
+      }
+      if (!changed) break;
+    }
+
+    // Summarize top labels per cluster and persist
+    db.prepare("DELETE FROM shared_cue_clusters").run();
+    const insertCluster = db.prepare(
+      "INSERT INTO shared_cue_clusters (cluster_id, centroid, top_labels, member_count) VALUES (?,?,?,?)"
+    );
+    let saved = 0;
+    for (let k = 0; k < K; k++) {
+      const memberLabels = labels.filter((_, i) => assignments[i] === k);
+      if (memberLabels.length === 0) continue;
+      const freq: Record<string, number> = {};
+      for (const l of memberLabels) freq[l] = (freq[l] ?? 0) + 1;
+      const topLabels = Object.entries(freq)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([label, count]) => ({ label, count }));
+      insertCluster.run(`cluster_${k}`, JSON.stringify(centroids[k]), JSON.stringify(topLabels), memberLabels.length);
+      saved++;
+    }
+
+    res.json({ status: "ok", clusters: saved, totalVectors: rows.length });
+  });
+
+  // ── YOUTUBE SEARCH — server-side only (key never sent to client) ──────────
+  // GET /api/lesson/videos?subject=Math&topic=counting&difficulty=Elementary
+  // Results cached for 24h per subject+topic+difficulty combination.
+
+  app.get("/api/lesson/videos", authenticate, async (req, res) => {
+    const subject    = String(req.query.subject   ?? "").trim().slice(0, 80);
+    const topic      = String(req.query.topic     ?? "").trim().slice(0, 120);
+    const difficulty = String(req.query.difficulty ?? "").trim().slice(0, 40);
+
+    if (!subject) return res.status(400).json({ error: "subject required" });
+
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      // Return empty rather than an error — lesson plan should still render
+      return res.json({ videos: [], cached: false, reason: "no_api_key" });
+    }
+
+    // Cache key: hash of subject+topic+difficulty
+    const cacheKey = Buffer.from(`${subject}|${topic}|${difficulty}`).toString("base64");
+    const cached: any = db.prepare(
+      "SELECT results, fetched_at FROM youtube_cache WHERE cache_key=?"
+    ).get(cacheKey);
+
+    if (cached) {
+      const ageMs = Date.now() - new Date(cached.fetched_at).getTime();
+      if (ageMs < 24 * 60 * 60 * 1000) {
+        return res.json({ videos: JSON.parse(cached.results), cached: true });
+      }
+    }
+
+    // Build search query
+    const q = encodeURIComponent(
+      `${topic || subject} ${difficulty} learning ${subject} kids educational`
+    );
+
+    try {
+      const ytRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=2&safeSearch=strict&q=${q}&key=${apiKey}`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+
+      if (!ytRes.ok) {
+        console.warn(`[youtube] API returned ${ytRes.status}`);
+        return res.json({ videos: [], cached: false, reason: `api_error_${ytRes.status}` });
+      }
+
+      const data: any = await ytRes.json();
+      const videos = (data.items ?? []).map((item: any) => ({
+        videoId:      item.id?.videoId,
+        title:        item.snippet?.title,
+        channelTitle: item.snippet?.channelTitle,
+        thumbnail:    item.snippet?.thumbnails?.medium?.url ?? item.snippet?.thumbnails?.default?.url,
+        watchUrl:     `https://www.youtube.com/watch?v=${item.id?.videoId}`,
+      })).filter((v: any) => v.videoId);
+
+      // Upsert cache
+      db.prepare(
+        "INSERT OR REPLACE INTO youtube_cache (cache_key, results, fetched_at) VALUES (?,?,datetime('now'))"
+      ).run(cacheKey, JSON.stringify(videos));
+
+      res.json({ videos, cached: false });
+    } catch (err: any) {
+      console.warn("[youtube] search failed:", err.message);
+      // Non-fatal — lesson still renders without video cards
+      res.json({ videos: [], cached: false, reason: "fetch_failed" });
+    }
+  });
+
   // ── STATIC / VITE ─────────────────────────────────────────────────────────
 
   if (process.env.NODE_ENV !== "production") {
+    // Dynamic import so vite is never loaded in production builds
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

@@ -1,7 +1,9 @@
 /**
  * NeuroSync API Client
  *
- * Security: the opaque session token is stored in localStorage.
+ * Security: the opaque session token is stored in sessionStorage so it is
+ * cleared automatically when the tab/browser closes. Every fresh visit
+ * starts from the login screen.
  * The raw user ID is NEVER stored or sent as a credential.
  * Cookie (httpOnly) is the primary auth vector; the Bearer header
  * is the fallback for sandboxed iframes where cookies are blocked.
@@ -17,22 +19,22 @@ export interface UserMeta {
 }
 
 export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function storeSession(token: string, meta: UserMeta): void {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(meta));
+  sessionStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(USER_KEY, JSON.stringify(meta));
 }
 
 export function clearSession(): void {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(USER_KEY);
 }
 
 export function getStoredMeta(): UserMeta | null {
   try {
-    const raw = localStorage.getItem(USER_KEY);
+    const raw = sessionStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;

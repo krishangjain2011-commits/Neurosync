@@ -261,6 +261,22 @@ export default function ReportsPage() {
             </div>
           )}
 
+          {/* Empty state — no report loaded yet */}
+          {!report && !loadingReport && !error && (
+            <div className="card" style={{ textAlign: "center", padding: "2.5rem 2rem", border: "2px dashed var(--border)", backgroundColor: "var(--canvas)" }}>
+              <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>📋</div>
+              <h3 style={{ margin: "0 0 0.5rem", fontSize: "1rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                No report loaded yet
+              </h3>
+              <p style={{ margin: "0 0 1.25rem", fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.65, maxWidth: "380px", marginLeft: "auto", marginRight: "auto" }}>
+                Click <strong>Refresh Data</strong> above to pull the latest progress, diet plans, and routines for {childName} into a printable report. Then use <strong>Generate AI Summary</strong> for a professional narrative.
+              </p>
+              <button className="btn-primary" onClick={fetchReport} disabled={!childId}>
+                🔄 Load Report
+              </button>
+            </div>
+          )}
+
           {/* Printable report area */}
           <AnimatePresence>
             {report && !loadingReport && (

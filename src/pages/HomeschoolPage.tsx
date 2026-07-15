@@ -1,8 +1,17 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { apiPost, apiGet, apiDelete } from "../lib/api";
 import FeatureTour from "../components/FeatureTour";
+
+// ── YouTube video type ─────────────────────────────────────────────────────
+interface YTVideo {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+  watchUrl: string;
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -331,10 +340,13 @@ export default function HomeschoolPage() {
   const [loading, setLoading] = useState(false);
   const [lesson, setLesson] = useState<LessonPlan | null>(null);
   const [error, setError] = useState("");
+  // YouTube video cards — keyed by step index
+  const [stepVideos, setStepVideos] = useState<Record<number, YTVideo[]>>({});
+  const [videosLoading, setVideosLoading] = useState(false);
 
   const generate = async () => {
     if (!subject) return;
-    setLoading(true); setError(""); setLesson(null);
+    setLoading(true); setError(""); setLesson(null); setStepVideos({});
     const p = activeChild?.onboarding_data as any;
     const prompt = `Create a detailed homeschool lesson plan for a neurodiverse child.
 
@@ -374,11 +386,38 @@ Return as JSON:
     try {
       const data = await apiPost<LessonPlan>("/api/gemini/structured", { prompt });
       setLesson(data);
+      // Fetch YouTube videos for each step in the background — non-blocking
+      fetchStepVideos(data, subject, topic, difficulty);
     } catch (e: any) {
       setError(e.message || "Generation failed. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fetch 1–2 YouTube videos per step, keyed by step index.
+  // Fires after lesson is set — never blocks rendering.
+  const fetchStepVideos = async (plan: LessonPlan, subj: string, top: string, diff: string) => {
+    setVideosLoading(true);
+    const results: Record<number, YTVideo[]> = {};
+    try {
+      // Fetch once per lesson (not per step) to respect API quota — use topic + subject
+      const params = new URLSearchParams({
+        subject: subj,
+        topic:   top || plan.topic || subj,
+        difficulty: diff,
+      });
+      const res = await apiGet<{ videos: YTVideo[]; cached?: boolean }>(`/api/lesson/videos?${params}`);
+      if (res.videos?.length) {
+        // Distribute available videos across steps (first step gets first video, etc.)
+        plan.steps?.forEach((_, i) => {
+          const vid = res.videos[i % res.videos.length];
+          if (vid) results[i] = [vid];
+        });
+      }
+    } catch { /* non-fatal — lesson renders fine without videos */ }
+    setStepVideos(results);
+    setVideosLoading(false);
   };
 
   return (
@@ -433,6 +472,12 @@ Return as JSON:
       {/* Handwriting tab */}
       {tab === "handwriting" && activeChild && (
         <HandwritingTool childId={activeChild.id} />
+      )}
+      {tab === "handwriting" && !activeChild && (
+        <div className="card" style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-muted)" }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>✍️</div>
+          <p style={{ margin: 0, fontSize: "0.875rem" }}>No child profile selected. Pick one from the sidebar to use the Handwriting Interpreter.</p>
+        </div>
       )}
 
       {/* Lesson Planner tab */}
@@ -522,6 +567,7 @@ Return as JSON:
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
                   {lesson.steps?.map((step, i) => {
                     const si = STYLE_ICONS[step.learningStyle] || STYLE_ICONS.visual;
+                    const videos = stepVideos[i] ?? [];
                     return (
                       <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
                         style={{ padding: "1rem", backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "10px" }}>
@@ -539,7 +585,42 @@ Return as JSON:
                           <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>📦 <strong>Materials:</strong> {step.materials.join(", ")}</div>
                         )}
                         {step.accommodations && (
-                          <div style={{ fontSize: "0.78rem", color: "var(--green)", backgroundColor: "var(--green-light)", padding: "0.35rem 0.6rem", borderRadius: "5px" }}>✅ <strong>Accommodation:</strong> {step.accommodations}</div>
+                          <div style={{ fontSize: "0.78rem", color: "var(--green)", backgroundColor: "var(--green-light)", padding: "0.35rem 0.6rem", borderRadius: "5px", marginBottom: "0.5rem" }}>✅ <strong>Accommodation:</strong> {step.accommodations}</div>
+                        )}
+
+                        {/* YouTube video cards */}
+                        {videos.length > 0 && (
+                          <div style={{ marginTop: "0.6rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                            {videos.map((vid) => (
+                              <a
+                                key={vid.videoId}
+                                href={vid.watchUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ display: "flex", alignItems: "center", gap: "0.65rem", padding: "0.5rem 0.65rem", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "var(--canvas)", textDecoration: "none", transition: "border-color 0.12s" }}
+                                onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--accent)")}
+                                onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
+                              >
+                                <img
+                                  src={vid.thumbnail}
+                                  alt={vid.title}
+                                  style={{ width: "72px", height: "48px", borderRadius: "5px", objectFit: "cover", flexShrink: 0 }}
+                                  loading="lazy"
+                                />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{vid.title}</div>
+                                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>{vid.channelTitle}</div>
+                                </div>
+                                <span style={{ fontSize: "0.7rem", color: "var(--red)", fontWeight: 600, flexShrink: 0 }}>▶ YouTube</span>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                        {/* Show a subtle loading shimmer while videos are being fetched */}
+                        {videosLoading && videos.length === 0 && (
+                          <div style={{ marginTop: "0.5rem", height: "52px", borderRadius: "8px", backgroundColor: "var(--surface-2)", animation: "shimmer 1.4s infinite", opacity: 0.6 }}>
+                            <style>{`@keyframes shimmer{0%,100%{opacity:.4}50%{opacity:.8}}`}</style>
+                          </div>
                         )}
                       </motion.div>
                     );
@@ -562,7 +643,26 @@ Return as JSON:
                   </div>
                 )}
 
-                <button className="btn-secondary" onClick={() => setLesson(null)}>Generate Another Lesson</button>
+                <button className="btn-secondary" onClick={() => { setLesson(null); setStepVideos({}); }}>Generate Another Lesson</button>
+              </motion.div>
+            )}
+
+            {/* Empty state — first-run prompt */}
+            {!lesson && !loading && !error && (
+              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <div className="card" style={{ textAlign: "center", padding: "2.5rem 2rem", border: "2px dashed var(--border)", backgroundColor: "var(--canvas)" }}>
+                  <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>📖</div>
+                  <h3 style={{ margin: "0 0 0.5rem", fontSize: "1rem", fontWeight: 700, color: "var(--text-primary)" }}>Your lesson plan will appear here</h3>
+                  <p style={{ margin: "0 0 1.25rem", fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.65, maxWidth: "380px", marginLeft: "auto", marginRight: "auto" }}>
+                    Pick a subject above, optionally add a topic, choose difficulty and learning style — then hit <strong>Generate Lesson Plan</strong>.
+                    The AI will create a step-by-step activity tailored to your child.
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0.5rem" }}>
+                    {["Math · Counting", "Reading · Sight words", "Science · Plants", "Art · Shapes"].map(s => (
+                      <span key={s} style={{ padding: "0.3rem 0.75rem", borderRadius: "999px", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.78rem", fontWeight: 500 }}>{s}</span>
+                    ))}
+                  </div>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

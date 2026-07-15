@@ -170,6 +170,26 @@ Return JSON: { "title":"..","focusGoal":"..","slots":[{"time":"9:00 AM","activit
                 </div>
               </motion.div>
             )}
+
+            {/* First-run / empty state — shown before any schedule is generated */}
+            {!schedule && !loading && !error && (
+              <motion.div key="therapy-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <div className="card" style={{ textAlign: "center", padding: "2.5rem 2rem", border: "2px dashed var(--border)", backgroundColor: "var(--canvas)" }}>
+                  <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>📅</div>
+                  <h3 style={{ margin: "0 0 0.5rem", fontSize: "1rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                    Your daily schedule will appear here
+                  </h3>
+                  <p style={{ margin: "0 0 1.25rem", fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.65, maxWidth: "360px", marginLeft: "auto", marginRight: "auto" }}>
+                    Set a focus area, choose duration and intensity above, then hit <strong>Generate Schedule</strong> to get a colour-coded timed routine with therapy, play, meals, and breaks.
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0.5rem" }}>
+                    {["🧩 Communication", "🏃 Motor skills", "😌 Regulation", "📖 Focus & Learning"].map(s => (
+                      <span key={s} style={{ padding: "0.3rem 0.75rem", borderRadius: "999px", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.78rem", fontWeight: 500 }}>{s}</span>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
         </>
       )}

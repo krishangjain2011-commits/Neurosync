@@ -12,7 +12,7 @@ services:
     startCommand: NODE_ENV=production node --import tsx/esm server.ts
 
     # Health check — Render pings this to confirm the service is up
-    healthCheckPath: /api/me
+    healthCheckPath: /health
 
     envVars:
       - key: NODE_ENV
