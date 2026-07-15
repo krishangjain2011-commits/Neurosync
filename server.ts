@@ -914,30 +914,38 @@ async function startServer() {
         return res.json({ matched: false, eventId: evInfo.lastInsertRowid, closestCues: [] });
       }
 
-      // Embed synchronously — try disk file first (real MFCC), then base64, then JS fallback
+      // Embed synchronously — try sidecar first, then guaranteed JS fallback
       let queryVec: number[] | null = null;
       let embModel = "js-fallback";
 
       if (uploadedFile) {
         queryVec = await mlEmbedFile(uploadedFile.path);
-        if (queryVec) { embModel = "python-mfcc"; console.log(`[recognize] python-mfcc embed OK, dims=${queryVec.length}`); }
-        else console.warn("[recognize] mlEmbedFile failed, trying base64 sidecar");
+        if (queryVec) embModel = "python-mfcc";
       }
       if (!queryVec && mediaData) {
         queryVec = await mlEmbed(mediaData);
-        if (queryVec) { embModel = "python-mfcc"; console.log(`[recognize] python-mfcc base64 embed OK, dims=${queryVec.length}`); }
-        else console.warn("[recognize] mlEmbed base64 failed, falling back to JS");
+        if (queryVec) embModel = "python-mfcc";
       }
-      if (!queryVec && mediaData) {
-        queryVec = extractEmbedding(mediaData, mediaType === "video" ? "video" : "audio");
-        embModel = "js-fallback";
-        console.warn(`[recognize] using JS fallback embedder, dims=${queryVec.length}`);
+      // JS fallback — works from either the uploaded file or base64 mediaData.
+      // This is the guaranteed path on Render (no Python sidecar available).
+      if (!queryVec) {
+        try {
+          let raw = mediaData;
+          if (!raw && uploadedFile && existsSync(uploadedFile.path)) {
+            raw = readFileSync(uploadedFile.path).toString("base64");
+          }
+          if (raw) {
+            queryVec = extractEmbedding(raw, "audio");
+            embModel = "js-fallback";
+            console.log(`[recognize] JS fallback embedder, dims=${queryVec.length}`);
+          }
+        } catch (err) {
+          console.warn("[recognize] JS fallback failed:", err);
+        }
       }
       if (!queryVec || queryVec.length === 0) {
-        return res.status(422).json({ error: "Could not extract audio embedding. Try a longer recording." });
+        return res.status(422).json({ error: "Could not extract audio embedding. Try a longer recording (5–10 seconds)." });
       }
-
-      if (!queryVec) console.warn("[recognize] sidecar unavailable, using JS embedder");
 
       // Nearest-centroid + softmax matching
       // Dual criteria: pass if softmax confidence OR raw cosine similarity is above threshold
