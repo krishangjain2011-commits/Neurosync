@@ -11,6 +11,8 @@
 
 const TOKEN_KEY = "neurosync_token";
 const USER_KEY  = "neurosync_user_meta"; // non-sensitive display data only
+const CHILDREN_KEY = "neurosync_children";
+const ACTIVE_CHILD_KEY = "neurosync_active_child";
 
 export interface UserMeta {
   email: string;
@@ -30,6 +32,8 @@ export function storeSession(token: string, meta: UserMeta): void {
 export function clearSession(): void {
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(USER_KEY);
+  sessionStorage.removeItem(CHILDREN_KEY);
+  sessionStorage.removeItem(ACTIVE_CHILD_KEY);
 }
 
 export function getStoredMeta(): UserMeta | null {
@@ -38,6 +42,34 @@ export function getStoredMeta(): UserMeta | null {
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
+  }
+}
+
+export function storeChildren(children: any[]): void {
+  sessionStorage.setItem(CHILDREN_KEY, JSON.stringify(children));
+}
+
+export function getStoredChildren(): any[] | null {
+  try {
+    const raw = sessionStorage.getItem(CHILDREN_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getStoredActiveChildId(): number | null {
+  const raw = sessionStorage.getItem(ACTIVE_CHILD_KEY);
+  if (!raw) return null;
+  const id = parseInt(raw, 10);
+  return Number.isNaN(id) ? null : id;
+}
+
+export function storeActiveChildId(childId: number | null): void {
+  if (childId === null) {
+    sessionStorage.removeItem(ACTIVE_CHILD_KEY);
+  } else {
+    sessionStorage.setItem(ACTIVE_CHILD_KEY, String(childId));
   }
 }
 

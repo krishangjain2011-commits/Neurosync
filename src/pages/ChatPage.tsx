@@ -25,7 +25,7 @@ function MsgBubble({ msg }: { msg: Message }) {
         color: isUser ? "white" : "var(--text-primary)",
         border: isUser ? "none" : "1px solid var(--border)",
         boxShadow: isUser ? "0 2px 8px rgba(139,92,246,0.25)" : "var(--shadow-sm)",
-        fontSize: "0.875rem", lineHeight: 1.65,
+        fontSize: "1rem", lineHeight: 1.65,
         whiteSpace: "pre-wrap", wordBreak: "break-word",
       }}>
         {msg.content}
@@ -98,15 +98,15 @@ export default function ChatPage() {
 
         <span style={{ fontSize: "1.25rem" }}>💬</span>
         <div>
-          <h1 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>{t("chatTitle")}</h1>
-          <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-muted)" }}>
+          <h1 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700 }}>{t("chatTitle")}</h1>
+          <p style={{ margin: 0, fontSize: "0.833rem", color: "var(--text-muted)" }}>
             {activeChild?.onboarding_data?.childName
               ? `${t("chatSupporting")} ${activeChild.onboarding_data.childName}`
               : t("chatSubtitle")}
           </p>
         </div>
         {!isOnline && (
-          <span style={{ marginLeft: "auto", padding: "0.2rem 0.6rem", backgroundColor: "var(--amber-light)", color: "var(--amber)", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 600 }}>
+          <span style={{ marginLeft: "auto", padding: "0.2rem 0.6rem", backgroundColor: "var(--amber-light)", color: "var(--amber)", borderRadius: "999px", fontSize: "0.722rem", fontWeight: 600 }}>
             📵 {t("offline")}
           </span>
         )}
@@ -133,7 +133,7 @@ export default function ChatPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
               {QUICK_PROMPTS.map(q => (
                 <button key={q} onClick={() => sendMessage(q)} disabled={!isOnline}
-                  style={{ padding: "0.35rem 0.7rem", borderRadius: "999px", border: "1px solid var(--border)", backgroundColor: "var(--surface)", color: "var(--text-secondary)", fontSize: "0.76rem", cursor: "pointer", opacity: isOnline ? 1 : 0.5 }}>
+                  style={{ padding: "0.35rem 0.7rem", borderRadius: "999px", border: "1px solid var(--border)", backgroundColor: "var(--surface)", color: "var(--text-secondary)", fontSize: "0.833rem", cursor: "pointer", opacity: isOnline ? 1 : 0.5 }}>
                   {q}
                 </button>
               ))}
@@ -161,7 +161,7 @@ export default function ChatPage() {
         background: "linear-gradient(90deg, var(--surface) 0%, var(--honey-light) 100%)",
       }}>
         {!isOnline && (
-          <div style={{ padding: "0.4rem 0.75rem", backgroundColor: "var(--amber-light)", color: "var(--amber)", borderRadius: "7px", fontSize: "0.75rem", marginBottom: "0.6rem", fontWeight: 500 }}>
+          <div style={{ padding: "0.4rem 0.75rem", backgroundColor: "var(--amber-light)", color: "var(--amber)", borderRadius: "7px", fontSize: "0.833rem", marginBottom: "0.6rem", fontWeight: 500 }}>
             📵 {t("chatOfflineNote")}
           </div>
         )}
@@ -171,7 +171,7 @@ export default function ChatPage() {
             disabled={streaming || !isOnline}
             placeholder={isOnline ? t("chatPlaceholder") : t("chatOfflinePlaceholder")}
             rows={1}
-            style={{ flex: 1, padding: "0.65rem 0.875rem", border: "1px solid var(--border)", borderRadius: "10px", backgroundColor: "var(--canvas)", color: "var(--text-primary)", fontSize: "0.875rem", fontFamily: "inherit", resize: "none", outline: "none", lineHeight: 1.5, maxHeight: "120px", overflow: "auto" }}
+            style={{ flex: 1, padding: "0.65rem 0.875rem", border: "1px solid var(--border)", borderRadius: "10px", backgroundColor: "var(--canvas)", color: "var(--text-primary)", fontSize: "1rem", fontFamily: "inherit", resize: "none", outline: "none", lineHeight: 1.5, maxHeight: "120px", overflow: "auto" }}
             onInput={e => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 120) + "px"; }}
             onFocus={e => e.currentTarget.style.borderColor = "var(--accent)"}
             onBlur={e => e.currentTarget.style.borderColor = "var(--border)"} />
@@ -179,7 +179,7 @@ export default function ChatPage() {
             {streaming ? t("chatSending") : t("chatSend")}
           </button>
         </div>
-        <p style={{ margin: "0.35rem 0 0", fontSize: "0.7rem", color: "var(--text-muted)" }}>{t("chatHint")}</p>
+        <p style={{ margin: "0.35rem 0 0", fontSize: "0.722rem", color: "var(--text-muted)" }}>{t("chatHint")}</p>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
+import FeatureTour from "../components/FeatureTour";
 
 function MultiSelect({ options, selected, onChange }: {
   options: string[]; selected: string[]; onChange: (v: string[]) => void;
@@ -34,6 +35,7 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
     childName: "", childAge: "",
     diagnoses: [] as string[], sensoryTriggers: [] as string[],
     strengths: [] as string[], goals: [] as string[],
+    otherDetails: "",
     consentGiven: false,
   });
 
@@ -48,7 +50,11 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
 
   const canNext = () => {
     if (step === 0) return form.childName.trim().length > 0;
-    if (step === 1) return form.diagnoses.length > 0;
+    if (step === 1) {
+      if (form.diagnoses.length === 0) return false;
+      if (form.diagnoses.includes(t("diagOther"))) return form.otherDetails.trim().length > 0;
+      return true;
+    }
     if (step === 5) return form.consentGiven;
     return true;
   };
@@ -64,6 +70,7 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
         sensoryTriggers: form.sensoryTriggers,
         strengths: form.strengths,
         goals: form.goals,
+        otherDetails: form.otherDetails.trim() || undefined,
       });
       navigate("/chat");
     } catch (err: any) {
@@ -88,6 +95,13 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
     <div key="dx">
       <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.875rem" }}>{t("selectAllThatApply")}</p>
       <MultiSelect options={DIAGNOSES} selected={form.diagnoses} onChange={set("diagnoses")} />
+      {form.diagnoses.includes(t("diagOther")) && (
+        <div style={{ marginTop: "1rem" }}>
+          <label className="label">{t("otherDetailsLabel")}</label>
+          <input className="input" value={form.otherDetails} onChange={e => set("otherDetails")(e.target.value)}
+            placeholder={t("otherDetailsPlaceholder")} />
+        </div>
+      )}
     </div>,
 
     <div key="triggers">
@@ -130,6 +144,21 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
     <div style={{ minHeight: "100vh", backgroundColor: "var(--canvas)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
         style={{ width: "100%", maxWidth: "520px", backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "16px", padding: "2rem", boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
+
+        {!addMode && (
+          <FeatureTour
+            featureKey="onboarding"
+            icon="✨"
+            title="Welcome to NeuroSync"
+            summary="Tell us a little about your child so NeuroSync can give you faster, more useful support across behavior, diet, therapy, and routines."
+            tips={[
+              "Enter your child's name and the most important details first.",
+              "If you're unsure about a diagnosis, choose the closest option and add notes.",
+              "The profile helps the app personalise suggestions without sharing data externally.",
+            ]}
+            accentColor="var(--accent)"
+          />
+        )}
 
         <div style={{ marginBottom: "1.5rem" }}>
           <div style={{ fontSize: "1.4rem", marginBottom: "0.4rem" }}>🧠</div>

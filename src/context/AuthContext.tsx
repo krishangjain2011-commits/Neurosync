@@ -1,9 +1,11 @@
 import React, {
-  createContext, useContext, useState,
+  createContext, useContext, useState, useRef,
   useEffect, useCallback, ReactNode,
 } from "react";
 import {
-  apiGet, apiPost, storeSession, clearSession, getStoredToken, getStoredMeta,
+  apiGet, apiPost, storeSession, clearSession,
+  getStoredToken, getStoredMeta, getStoredChildren,
+  getStoredActiveChildId, storeChildren, storeActiveChildId,
 } from "../lib/api";
 
 export interface OnboardingData {
@@ -13,6 +15,7 @@ export interface OnboardingData {
   sensoryTriggers: string[];
   strengths: string[];
   goals: string[];
+  otherDetails?: string;
 }
 
 export interface ChildProfile {
@@ -55,30 +58,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]               = useState<AuthUser | null>(null);
   const [loading, setLoading]         = useState(true);
   const [activeChild, setActiveChild] = useState<ChildProfile | null>(null);
+  const activeChildRef                 = useRef<ChildProfile | null>(null);
+
+  useEffect(() => {
+    activeChildRef.current = activeChild;
+  }, [activeChild]);
+
+  const handleSetActiveChild = useCallback((childOrUpdater: React.SetStateAction<ChildProfile | null>) => {
+    setActiveChild((current) => {
+      const next = typeof childOrUpdater === "function"
+        ? (childOrUpdater as (prev: ChildProfile | null) => ChildProfile | null)(current)
+        : childOrUpdater;
+      storeActiveChildId(next?.id ?? null);
+      return next;
+    });
+  }, []);
 
   const refreshUser = useCallback(async () => {
     try {
       const me = await apiGet<AuthUser>("/api/me");
       setUser(me);
-      // Auto-select first child if none selected
-      setActiveChild((prev) => {
-        if (prev) return me.children.find((c) => c.id === prev.id) ?? me.children[0] ?? null;
-        return me.children[0] ?? null;
-      });
+      storeChildren(me.children);
+      const storedChildId = getStoredActiveChildId();
+      const selectedChild = me.children.find((c) => c.id === activeChildRef.current?.id)
+        ?? me.children.find((c) => c.id === storedChildId)
+        ?? me.children[0]
+        ?? null;
+      handleSetActiveChild(selectedChild);
     } catch {
       setUser(null);
-      setActiveChild(null);
+      handleSetActiveChild(null);
     }
-  }, []);
+  }, [handleSetActiveChild]);
 
   useEffect(() => {
     const token = getStoredToken();
     if (token) {
-      refreshUser().finally(() => setLoading(false));
+      const storedUser = getStoredMeta();
+      const storedChildren = getStoredChildren();
+      const storedChildId = getStoredActiveChildId();
+      if (storedUser) {
+        setUser({
+          ...storedUser,
+          children: Array.isArray(storedChildren) ? storedChildren : [],
+          id: 0,
+          preferredLanguage: "en",
+        } as AuthUser);
+      }
+      if (storedChildren && storedChildren.length > 0) {
+        const initialChild = storedChildren.find((c: ChildProfile) => c.id === storedChildId) ?? storedChildren[0];
+        handleSetActiveChild(initialChild);
+      }
+      if (storedUser) {
+        setLoading(false);
+        refreshUser().catch(() => {}).finally(() => setLoading(false));
+      } else {
+        refreshUser().finally(() => setLoading(false));
+      }
     } else {
       setLoading(false);
     }
-  }, [refreshUser]);
+  }, [refreshUser, handleSetActiveChild]);
 
   const login = async (email: string, password: string) => {
     const data = await apiPost<{ token: string; email: string; role: string; displayName: string | null }>(
@@ -111,12 +151,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const updated = await apiGet<AuthUser>("/api/me");
     const child = updated.children.find((c) => c.id === res.childId)!;
     setActiveChild(child);
+    storeActiveChildId(child.id);
     return child;
   };
 
   return (
     <AuthContext.Provider value={{
-      user, loading, activeChild, setActiveChild,
+      user, loading, activeChild, setActiveChild: handleSetActiveChild,
       login, register, logout, refreshUser, addChild,
     }}>
       {children}

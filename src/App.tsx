@@ -15,6 +15,7 @@ import EmergencyPage from "./pages/EmergencyPage";
 import InsightsPage from "./pages/InsightsPage";
 import ProgressPage from "./pages/ProgressPage";
 import ReportsPage from "./pages/ReportsPage";
+import VisualBoardPage from "./pages/VisualBoardPage";
 
 function Spinner() {
   const { t } = useLang();
@@ -73,6 +74,7 @@ function AppRoutes() {
         <Route path="diet"       element={<DietPage />} />
         <Route path="therapy"    element={<TherapyPage />} />
         <Route path="homeschool" element={<HomeschoolPage />} />
+        <Route path="visual-board" element={<VisualBoardPage />} />
         <Route path="emergency"  element={<EmergencyPage />} />
         <Route path="progress"   element={<ProgressPage />} />
         <Route path="reports"    element={<ReportsPage />} />

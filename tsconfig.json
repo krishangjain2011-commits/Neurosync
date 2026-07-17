@@ -9,11 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "outDir": "./dist",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./*"]
-    }
+    "outDir": "./dist"
   },
   "include": ["src", "db", "lib", "server.ts", "vite.config.ts"],
   "exclude": ["node_modules", "dist"]

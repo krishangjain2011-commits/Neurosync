@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useOffline } from "../context/OfflineContext";
-import { apiPost, apiGet, apiDelete } from "../lib/api";
+import { apiPost, apiGet, apiDelete, getStoredToken } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import {
   saveLocalModel, loadLocalModel, extractBlobEmbedding,
@@ -349,7 +349,7 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
       const formData = new FormData();
       formData.append("audio", audioBlob, "clip.webm");
 
-      const token = localStorage.getItem("neurosync_token");
+      const token = getStoredToken();
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -698,11 +698,11 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
             <span style={{ fontSize: "1.3rem" }}>🔍</span>
             <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>No confident match found</h2>
           </div>
-          <p style={{ margin: "0 0 1rem", fontSize: "0.83rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-            The model couldn't confidently match this audio.
+          <p style={{ margin: "0 0 1rem", fontSize: "0.83rem", color: "var(--text-secondary)", lineHeight: 1.7 }}>
+            This sound did not match a clear saved behaviour yet.
             {closestCues.length > 0
-              ? " Here are the closest patterns — these are below the confidence threshold, not confirmed answers."
-              : " No similar patterns found in the library yet."}
+              ? " The closest patterns are shown below, but they are not confirmed answers."
+              : " No similar patterns are stored yet in this child's library."}
           </p>
 
           {/* Closest known patterns */}
@@ -776,7 +776,7 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
               </button>
             </div>
             <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Saving a label adds this audio clip to {childName}'s model for future recognition.
+              Saving a label helps NeuroSync recognise this sound more accurately next time.
             </p>
           </div>
 

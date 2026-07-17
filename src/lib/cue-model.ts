@@ -178,97 +178,151 @@ function pitchProxy(samples: number[]): number {
   return bestR / r0;
 }
 
-export function extractBlobEmbedding(blob: Blob): Promise<number[]> {
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      try {
-        const buf    = new Uint8Array(reader.result as ArrayBuffer);
-        const DIMS   = 128;
-        const N_BANDS = 32;
-        const N_SEG  = 16;
-        const stride = blob.type.startsWith("video") ? 2 : 1;
+function resampleAudio(samples: Float32Array, sourceRate: number, targetRate: number): Float32Array {
+  const targetLength = Math.max(1, Math.round(samples.length * targetRate / sourceRate));
+  const out = new Float32Array(targetLength);
+  const ratio = samples.length / targetLength;
+  for (let i = 0; i < targetLength; i++) {
+    const pos = i * ratio;
+    const low = Math.floor(pos);
+    const high = Math.min(low + 1, samples.length - 1);
+    const t = pos - low;
+    out[i] = samples[low] * (1 - t) + samples[high] * t;
+  }
+  return out;
+}
 
-        // Convert bytes to centered samples [-1, 1]
-        const samples: number[] = [];
-        for (let i = 0; i < buf.length; i += stride) samples.push((buf[i] - 128) / 128);
+async function decodeBlobToSamples(blob: Blob): Promise<number[] | null> {
+  if (typeof window === "undefined") return null;
+  const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext | undefined;
+  if (!AudioCtx) return null;
 
-        if (samples.length < 64) { resolve(new Array(DIMS).fill(0)); return; }
-
-        // Band energies via FFT
-        const FFT_SIZE = 1024;
-        const start    = Math.max(0, Math.floor(samples.length / 2) - FFT_SIZE / 2);
-        const frame    = samples.slice(start, start + FFT_SIZE);
-        while (frame.length < FFT_SIZE) frame.push(0);
-        const hann = hannWindow(FFT_SIZE);
-        const re   = new Float64Array(FFT_SIZE);
-        const im   = new Float64Array(FFT_SIZE);
-        for (let i = 0; i < FFT_SIZE; i++) re[i] = frame[i] * hann[i];
-        fftInPlace(re, im);
-        const mags = new Float64Array(FFT_SIZE / 2);
-        for (let i = 0; i < FFT_SIZE / 2; i++) mags[i] = Math.sqrt(re[i]*re[i] + im[i]*im[i]);
-        const bandE = melBandEnergies(mags, FFT_SIZE, N_BANDS);
-
-        // Delta energies (3-window first derivative)
-        const nW = 3, wLen = Math.min(FFT_SIZE, Math.floor(samples.length / nW));
-        const allE: Float64Array[] = [];
-        for (let w = 0; w < nW; w++) {
-          const ws = Math.floor((w / nW) * samples.length);
-          const wf = samples.slice(ws, ws + wLen);
-          while (wf.length < FFT_SIZE) wf.push(0);
-          const wf_ = wf.slice(0, FFT_SIZE);
-          const wh  = hannWindow(FFT_SIZE);
-          const wre = new Float64Array(FFT_SIZE); const wim = new Float64Array(FFT_SIZE);
-          for (let i = 0; i < FFT_SIZE; i++) wre[i] = wf_[i] * wh[i];
-          fftInPlace(wre, wim);
-          const wm = new Float64Array(FFT_SIZE / 2);
-          for (let i = 0; i < FFT_SIZE / 2; i++) wm[i] = Math.sqrt(wre[i]*wre[i] + wim[i]*wim[i]);
-          allE.push(melBandEnergies(wm, FFT_SIZE, N_BANDS));
+  try {
+    const arrayBuffer = await blob.arrayBuffer();
+    const ctx = new AudioCtx();
+    try {
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      let samples: Float32Array<ArrayBufferLike> = audioBuffer.getChannelData(0) as Float32Array<ArrayBufferLike>;
+      if (audioBuffer.numberOfChannels > 1) {
+        const mixed = new Float32Array(audioBuffer.length) as Float32Array<ArrayBufferLike>;
+        for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+          const channel = audioBuffer.getChannelData(c) as Float32Array<ArrayBufferLike>;
+          for (let i = 0; i < mixed.length; i++) mixed[i] += channel[i];
         }
-        const deltaE = new Float64Array(N_BANDS);
-        for (let b = 0; b < N_BANDS; b++) deltaE[b] = allE[nW-1][b] - allE[0][b];
-
-        // Temporal features
-        const segLen = Math.max(1, Math.floor(samples.length / N_SEG));
-        const rmsArr = new Float64Array(N_SEG);
-        const cntArr = new Float64Array(N_SEG);
-        const zcrArr = new Float64Array(N_SEG);
-        const pitArr = new Float64Array(N_SEG);
-        for (let s = 0; s < N_SEG; s++) {
-          const seg = samples.slice(s * segLen, (s + 1) * segLen);
-          if (!seg.length) continue;
-          rmsArr[s] = Math.sqrt(seg.reduce((a, v) => a + v*v, 0) / seg.length);
-          const segF = seg.slice(0, 256); while (segF.length < 256) segF.push(0);
-          const sh = hannWindow(256);
-          const sr_ = new Float64Array(256); const si = new Float64Array(256);
-          for (let i = 0; i < 256; i++) sr_[i] = segF[i] * sh[i];
-          fftInPlace(sr_, si);
-          const sm = new Float64Array(128);
-          for (let i = 0; i < 128; i++) sm[i] = Math.sqrt(sr_[i]*sr_[i] + si[i]*si[i]);
-          cntArr[s] = spectralCentroid(sm);
-          zcrArr[s] = zcr(seg);
-          pitArr[s] = pitchProxy(seg);
-        }
-
-        // Assemble + L2-normalize
-        const vec = [
-          ...Array.from(bandE),   // 32
-          ...Array.from(deltaE),  // 32
-          ...Array.from(rmsArr),  // 16
-          ...Array.from(cntArr),  // 16
-          ...Array.from(zcrArr),  // 16
-          ...Array.from(pitArr),  // 16
-        ];
-        const norm = Math.sqrt(vec.reduce((s, v) => s + v*v, 0));
-        if (norm > 0) for (let i = 0; i < vec.length; i++) vec[i] /= norm;
-
-        resolve(vec.slice(0, DIMS));
-      } catch {
-        resolve(new Array(128).fill(0));
+        for (let i = 0; i < mixed.length; i++) mixed[i] /= audioBuffer.numberOfChannels;
+        samples = mixed;
       }
-    };
-    reader.readAsArrayBuffer(blob);
+      if (audioBuffer.sampleRate !== 22050) {
+        samples = resampleAudio(samples, audioBuffer.sampleRate, 22050);
+      }
+      return Array.from(samples);
+    } finally {
+      ctx.close().catch(() => {});
+    }
+  } catch {
+    return null;
+  }
+}
+
+function blobToSamples(blob: Blob, stride: number): Promise<number[]> {
+  return new Promise(async (resolve) => {
+    const decoded = await decodeBlobToSamples(blob);
+    if (decoded && decoded.length >= 64) {
+      resolve(decoded);
+      return;
+    }
+
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    const samples: number[] = [];
+    for (let i = 0; i < buf.length; i += stride) {
+      samples.push((buf[i] - 128) / 128);
+    }
+    resolve(samples);
   });
+}
+
+export async function extractBlobEmbedding(blob: Blob): Promise<number[]> {
+  try {
+    const DIMS = 128;
+    const N_BANDS = 32;
+    const N_SEG = 16;
+    const stride = blob.type.startsWith("video") ? 2 : 1;
+    const samples = await blobToSamples(blob, stride);
+    if (samples.length < 64) return new Array(DIMS).fill(0);
+
+    const FFT_SIZE = 1024;
+    const start = Math.max(0, Math.floor(samples.length / 2) - FFT_SIZE / 2);
+    const frame = samples.slice(start, start + FFT_SIZE);
+    while (frame.length < FFT_SIZE) frame.push(0);
+
+    const hann = hannWindow(FFT_SIZE);
+    const re = new Float64Array(FFT_SIZE);
+    const im = new Float64Array(FFT_SIZE);
+    for (let i = 0; i < FFT_SIZE; i++) re[i] = frame[i] * hann[i];
+    fftInPlace(re, im);
+
+    const mags = new Float64Array(FFT_SIZE / 2);
+    for (let i = 0; i < FFT_SIZE / 2; i++) mags[i] = Math.sqrt(re[i] * re[i] + im[i] * im[i]);
+    const bandE = melBandEnergies(mags, FFT_SIZE, N_BANDS);
+
+    const nW = 3;
+    const wLen = Math.min(FFT_SIZE, Math.floor(samples.length / nW));
+    const allE: Float64Array[] = [];
+    for (let w = 0; w < nW; w++) {
+      const ws = Math.floor((w / nW) * samples.length);
+      const wf = samples.slice(ws, ws + wLen);
+      while (wf.length < FFT_SIZE) wf.push(0);
+      const wf_ = wf.slice(0, FFT_SIZE);
+      const wh = hannWindow(FFT_SIZE);
+      const wre = new Float64Array(FFT_SIZE);
+      const wim = new Float64Array(FFT_SIZE);
+      for (let i = 0; i < FFT_SIZE; i++) wre[i] = wf_[i] * wh[i];
+      fftInPlace(wre, wim);
+      const wm = new Float64Array(FFT_SIZE / 2);
+      for (let i = 0; i < FFT_SIZE / 2; i++) wm[i] = Math.sqrt(wre[i] * wre[i] + wim[i] * wim[i]);
+      allE.push(melBandEnergies(wm, FFT_SIZE, N_BANDS));
+    }
+
+    const deltaE = new Float64Array(N_BANDS);
+    for (let b = 0; b < N_BANDS; b++) deltaE[b] = allE[nW - 1][b] - allE[0][b];
+
+    const segLen = Math.max(1, Math.floor(samples.length / N_SEG));
+    const rmsArr = new Float64Array(N_SEG);
+    const cntArr = new Float64Array(N_SEG);
+    const zcrArr = new Float64Array(N_SEG);
+    const pitArr = new Float64Array(N_SEG);
+    for (let s = 0; s < N_SEG; s++) {
+      const seg = samples.slice(s * segLen, (s + 1) * segLen);
+      if (!seg.length) continue;
+      rmsArr[s] = Math.sqrt(seg.reduce((a, v) => a + v * v, 0) / seg.length);
+      const segF = seg.slice(0, 256);
+      while (segF.length < 256) segF.push(0);
+      const sh = hannWindow(256);
+      const sr_ = new Float64Array(256);
+      const si = new Float64Array(256);
+      for (let i = 0; i < 256; i++) sr_[i] = segF[i] * sh[i];
+      fftInPlace(sr_, si);
+      const sm = new Float64Array(128);
+      for (let i = 0; i < 128; i++) sm[i] = Math.sqrt(sr_[i] * sr_[i] + si[i] * si[i]);
+      cntArr[s] = spectralCentroid(sm);
+      zcrArr[s] = zcr(seg);
+      pitArr[s] = pitchProxy(seg);
+    }
+
+    const vec = [
+      ...Array.from(bandE),
+      ...Array.from(deltaE),
+      ...Array.from(rmsArr),
+      ...Array.from(cntArr),
+      ...Array.from(zcrArr),
+      ...Array.from(pitArr),
+    ];
+    const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
+    if (norm > 0) for (let i = 0; i < vec.length; i++) vec[i] /= norm;
+    return vec.slice(0, DIMS);
+  } catch {
+    return new Array(128).fill(0);
+  }
 }
 
 // ── Cosine similarity ─────────────────────────────────────────────────────────

@@ -33,7 +33,10 @@ export default function FeatureTour({
     setExpanded(false);
   };
 
-  const reopen = () => setExpanded(e => !e);
+  const reopen = () => {
+    setVisible(true);
+    setExpanded(true);
+  };
 
   return (
     <div style={{ marginBottom: "1.25rem" }}>

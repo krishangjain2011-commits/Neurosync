@@ -19,6 +19,7 @@ export default function Layout() {
     { path: "/diet",       label: t("navDiet"),       icon: "🥗" },
     { path: "/therapy",    label: t("navTherapy"),    icon: "📅" },
     { path: "/homeschool", label: t("navHomeschool"), icon: "📚" },
+    { path: "/visual-board", label: t("navVisualBoard"), icon: "🖼️" },
     { path: "/progress",   label: t("navProgress"),   icon: "📈" },
     { path: "/reports",    label: t("navReports"),    icon: "📋" },
     { path: "/emergency",  label: t("navEmergency"),  icon: "🚨" },
@@ -44,7 +45,7 @@ export default function Layout() {
             <div style={{ fontWeight: 800, fontSize: "1rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
               NeuroSync
             </div>
-            <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", letterSpacing: "0.01em" }}>{t("aiCaretaker")}</div>
+            <div style={{ fontSize: "0.722rem", color: "var(--text-muted)", letterSpacing: "0.01em" }}>{t("aiCaretaker")}</div>
           </div>
         </div>
       </div>
@@ -52,7 +53,7 @@ export default function Layout() {
       {/* Child selector */}
       {user && user.children.length > 0 && (
         <div style={{ marginBottom: "1.25rem", padding: "0 0.25rem" }}>
-          <div style={{ fontSize: "0.63rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.35rem", padding: "0 0.25rem" }}>
+          <div style={{ fontSize: "0.667rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.35rem", padding: "0 0.25rem" }}>
             {t("activeChild")}
           </div>
           <select
@@ -64,7 +65,7 @@ export default function Layout() {
             style={{
               width: "100%", padding: "0.4rem 0.55rem", borderRadius: "7px",
               border: "1px solid var(--border)", background: "var(--surface)",
-              color: "var(--text-primary)", fontSize: "0.82rem", fontWeight: 600,
+              color: "var(--text-primary)", fontSize: "0.875rem", fontWeight: 600,
               cursor: "pointer", outline: "none",
             }}
           >
@@ -80,7 +81,7 @@ export default function Layout() {
               marginTop: "0.3rem", width: "100%", padding: "0.3rem 0.55rem",
               borderRadius: "6px", border: "1px dashed var(--border)",
               background: "transparent", color: "var(--text-muted)",
-              fontSize: "0.75rem", cursor: "pointer", textAlign: "left",
+              fontSize: "0.833rem", cursor: "pointer", textAlign: "left",
               display: "flex", alignItems: "center", gap: "0.3rem",
             }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--accent)"; (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)"; }}
@@ -102,7 +103,7 @@ export default function Layout() {
               display: "flex", alignItems: "center", gap: "0.7rem",
               padding: "0.6rem 0.75rem", borderRadius: "8px",
               textDecoration: "none",
-              fontSize: "0.925rem",
+              fontSize: "1rem",
               fontWeight: isActive ? 700 : 500,
               background: isActive ? "var(--accent-light)" : "transparent",
               color: isActive ? "var(--accent)" : "var(--text-secondary)",
@@ -128,7 +129,7 @@ export default function Layout() {
 
       {/* Language switcher */}
       <div style={{ padding: "0.625rem 0.25rem 0", borderTop: "1px solid var(--border)", marginTop: "0.75rem" }}>
-        <div style={{ fontSize: "0.63rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.35rem", padding: "0 0.25rem" }}>
+        <div style={{ fontSize: "0.667rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.35rem", padding: "0 0.25rem" }}>
           {t("language")}
         </div>
         <div style={{ display: "flex", gap: "0.25rem" }}>
@@ -141,7 +142,7 @@ export default function Layout() {
                 border: `1px solid ${lang === l.code ? "var(--accent)" : "var(--border)"}`,
                 background: lang === l.code ? "var(--accent-light)" : "transparent",
                 color: lang === l.code ? "var(--accent)" : "var(--text-muted)",
-                fontSize: "0.72rem", fontWeight: lang === l.code ? 700 : 500,
+                fontSize: "0.722rem", fontWeight: lang === l.code ? 700 : 500,
                 cursor: "pointer",
               }}
             >{l.nativeLabel}</button>
@@ -155,7 +156,7 @@ export default function Layout() {
           margin: "0.5rem 0.25rem 0",
           padding: "0.4rem 0.65rem",
           background: pendingCount > 0 ? "var(--amber-light)" : "var(--surface-2)",
-          borderRadius: "6px", fontSize: "0.73rem",
+          borderRadius: "6px", fontSize: "0.722rem",
           color: pendingCount > 0 ? "var(--amber)" : "var(--text-muted)",
         }}>
           {!isOnline ? `📵 ${t("offline")}` : `⏳ ${pendingCount} ${t("pendingSync")}`}
@@ -165,10 +166,10 @@ export default function Layout() {
       {/* User footer */}
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem", marginTop: "auto", paddingBottom: "0.5rem" }}>
         <div style={{ padding: "0 0.5rem", marginBottom: "0.3rem" }}>
-          <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {user?.displayName || user?.email}
           </div>
-          <div style={{ fontSize: "0.68rem", color: "var(--accent)", textTransform: "capitalize", fontWeight: 500 }}>
+          <div style={{ fontSize: "0.722rem", color: "var(--accent)", textTransform: "capitalize", fontWeight: 500 }}>
             {user?.role?.replace("_", " ")}
           </div>
         </div>
@@ -179,7 +180,7 @@ export default function Layout() {
             width: "100%", padding: "0.4rem 0.65rem",
             borderRadius: "6px", border: "none",
             background: "transparent", color: "var(--text-muted)",
-            fontSize: "0.8rem", fontWeight: 500, cursor: "pointer", textAlign: "left",
+            fontSize: "0.875rem", fontWeight: 500, cursor: "pointer", textAlign: "left",
           }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--red-light)"; (e.currentTarget as HTMLElement).style.color = "var(--red)"; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}

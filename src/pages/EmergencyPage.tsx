@@ -117,10 +117,10 @@ export default function EmergencyPage() {
       >
         <span style={{ fontSize: "1.5rem", flexShrink: 0 }}>🚨</span>
         <div>
-          <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.1rem", fontWeight: 700, color: "var(--red)" }}>
+          <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.25rem", fontWeight: 700, color: "var(--red)" }}>
             Emergency Support
           </h1>
-          <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-primary)", lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--text-primary)", lineHeight: 1.5 }}>
             For <strong>life-threatening emergencies, call 911 immediately.</strong> This tool provides AI-assisted guidance and local resource suggestions for caregiving crises.
           </p>
         </div>
@@ -128,7 +128,7 @@ export default function EmergencyPage() {
 
       {/* Hotlines — always visible */}
       <div className="card" style={{ marginBottom: "1.25rem" }}>
-        <h2 style={{ margin: "0 0 0.875rem", fontSize: "0.95rem", fontWeight: 700 }}>📞 Emergency Hotlines</h2>        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "0.6rem" }}>
+        <h2 style={{ margin: "0 0 0.875rem", fontSize: "1.05rem", fontWeight: 700 }}>📞 Emergency Hotlines</h2>        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "0.6rem" }}>
           {HOTLINES.map((h) => (
             <div
               key={h.name}
@@ -140,9 +140,9 @@ export default function EmergencyPage() {
                 borderLeft: `3px solid ${h.color}`,
               }}
             >
-              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: h.color, marginBottom: "0.2rem" }}>{h.name}</div>
-              <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.2rem" }}>{h.number}</div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{h.desc}</div>
+              <div style={{ fontSize: "0.9rem", fontWeight: 700, color: h.color, marginBottom: "0.2rem" }}>{h.name}</div>
+              <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.2rem" }}>{h.number}</div>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{h.desc}</div>
             </div>
           ))}
         </div>
@@ -150,8 +150,8 @@ export default function EmergencyPage() {
 
       {/* Location */}
       <div className="card" style={{ marginBottom: "1.25rem" }}>
-        <h2 style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", fontWeight: 600 }}>📍 Location (optional)</h2>
-        <p style={{ margin: "0 0 0.75rem", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+        <h2 style={{ margin: "0 0 0.75rem", fontSize: "1.05rem", fontWeight: 600 }}>📍 Location (optional)</h2>
+        <p style={{ margin: "0 0 0.75rem", fontSize: "0.9rem", color: "var(--text-secondary)" }}>
           Sharing your location helps find nearby pediatric clinics and emergency services.
         </p>
         {location ? (
@@ -187,7 +187,7 @@ export default function EmergencyPage() {
 
       {/* Concern selector */}
       <div className="card" style={{ marginBottom: "1.25rem" }}>
-        <h2 style={{ margin: "0 0 0.875rem", fontSize: "0.95rem", fontWeight: 600 }}>🆘 What's happening?</h2>
+        <h2 style={{ margin: "0 0 0.875rem", fontSize: "1.05rem", fontWeight: 600 }}>🆘 What's happening?</h2>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "0.4rem", marginBottom: "1rem" }}>
           {EMERGENCY_CONCERNS.map((c) => {

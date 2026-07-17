@@ -106,8 +106,8 @@ export default function AuthPage() {
             fontSize: "1.6rem", margin: "0 auto 0.75rem",
             boxShadow: "0 4px 16px rgba(139,92,246,0.35)",
           }}>🧠</div>
-          <h1 style={{ margin: 0, fontSize: "1.4rem", fontWeight: 700, color: "var(--text-primary)" }}>NeuroSync</h1>
-          <p style={{ margin: "0.3rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+          <h1 style={{ margin: 0, fontSize: "1.55rem", fontWeight: 700, color: "var(--text-primary)" }}>NeuroSync</h1>
+          <p style={{ margin: "0.3rem 0 0", fontSize: "0.875rem", color: "var(--text-muted)" }}>
             {t("appTagline")}
           </p>
         </div>
@@ -123,7 +123,7 @@ export default function AuthPage() {
                 border: `1.5px solid ${lang === l.code ? "var(--accent)" : "var(--border)"}`,
                 backgroundColor: lang === l.code ? "var(--accent-light)" : "transparent",
                 color: lang === l.code ? "var(--accent)" : "var(--text-muted)",
-                fontSize: "0.78rem", fontWeight: lang === l.code ? 700 : 400,
+                fontSize: "0.833rem", fontWeight: lang === l.code ? 700 : 400,
                 cursor: "pointer", transition: "all 0.12s",
               }}
             >
@@ -136,7 +136,7 @@ export default function AuthPage() {
         <div style={{ display: "flex", backgroundColor: "var(--surface-2)", borderRadius: "8px", padding: "3px", marginBottom: "1.5rem" }}>
           {(["login", "register"] as const).map((m) => (
             <button key={m} onClick={() => { setMode(m); setError(""); }}
-              style={{ flex: 1, padding: "0.45rem", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "0.83rem", fontWeight: mode === m ? 600 : 400, backgroundColor: mode === m ? "var(--canvas)" : "transparent", color: mode === m ? "var(--accent)" : "var(--text-muted)", boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>
+              style={{ flex: 1, padding: "0.45rem", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "0.9rem", fontWeight: mode === m ? 600 : 400, backgroundColor: mode === m ? "var(--canvas)" : "transparent", color: mode === m ? "var(--accent)" : "var(--text-muted)", boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>
               {m === "login" ? t("signIn") : t("createAccount")}
             </button>
           ))}
@@ -175,7 +175,7 @@ export default function AuthPage() {
           )}
 
           {error && (
-            <div style={{ padding: "0.6rem 0.875rem", backgroundColor: "var(--red-light)", color: "var(--red)", borderRadius: "8px", fontSize: "0.83rem" }}>
+            <div style={{ padding: "0.6rem 0.875rem", backgroundColor: "var(--red-light)", color: "var(--red)", borderRadius: "8px", fontSize: "0.875rem" }}>
               {error}
             </div>
           )}
@@ -191,7 +191,7 @@ export default function AuthPage() {
           </button>
         </form>
 
-        <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", textAlign: "center", marginTop: "1.25rem", lineHeight: 1.6, whiteSpace: "pre-line" }}>
+        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", textAlign: "center", marginTop: "1.25rem", lineHeight: 1.6, whiteSpace: "pre-line" }}>
           {t("authDisclaimer")}
         </p>
       </motion.div>

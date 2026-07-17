@@ -3,21 +3,21 @@
 @layer base {
   :root {
     /* ── Palette ── */
-    --canvas:      #FAFAF8;
+    --canvas:      #F7F4FF;
     --surface:     #FFFFFF;
-    --surface-2:   #F4F3F0;
-    --border:      #E9E7E3;
-    --border-soft: #F0EEE9;
+    --surface-2:   #F4EFFD;
+    --border:      #DDD0F4;
+    --border-soft: #E8E1F8;
 
     /* ── Text ── */
-    --text-primary:   #1A1410;
-    --text-secondary: #5C5248;
-    --text-muted:     #9E9189;
+    --text-primary:   #211A25;
+    --text-secondary: #5D5170;
+    --text-muted:     #8B7F96;
 
     /* ── Accent ── */
-    --accent:       #7C3AED;
-    --accent-light: #EDE9FE;
-    --accent-dark:  #5B21B6;
+    --accent:       #6D28D9;
+    --accent-light: #E9D5FF;
+    --accent-dark:  #4C1D95;
 
     /* ── Semantic ── */
     --green:        #059669;
@@ -35,23 +35,35 @@
     --peach:        #EA580C;
     --peach-light:  #FFF7ED;
 
-    /* ── Shadows — very subtle ── */
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-    --shadow-md: 0 2px 8px rgba(0,0,0,0.07);
-    --shadow-lg: 0 4px 20px rgba(0,0,0,0.08);
+    /* ── Shadows ── */
+    --shadow-sm: 0 6px 18px rgba(45, 15, 80, 0.08);
+    --shadow-md: 0 12px 36px rgba(45, 15, 80, 0.10);
+    --shadow-lg: 0 20px 60px rgba(45, 15, 80, 0.14);
+
+    /* ── Type scale tokens (18px base) ── */
+    --text-xs:    0.667rem;   /* ~12px — micro-labels, timestamps */
+    --text-sm:    0.75rem;    /* ~13.5px — labels, badges, meta */
+    --text-base:  1rem;       /* 18px — body, chat, inputs */
+    --text-md:    1.125rem;   /* ~20px — section headings */
+    --text-lg:    1.4rem;     /* ~25px — page h1 titles */
+    --text-xl:    1.75rem;    /* ~31.5px — large numerics */
+    --text-input: 0.9375rem;  /* ~17px — form inputs */
+    --text-btn:   0.875rem;   /* ~15.75px — buttons, nav footer */
+    --text-nav:   0.722rem;   /* ~13px — logo sub, section labels */
   }
 
   * { box-sizing: border-box; }
 
   html {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background: var(--canvas);
+    background: linear-gradient(180deg, #F6F2FF 0%, #F8F6FF 100%);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
-    font-size: 15px;
+    font-size: 18px;
+    line-height: 1.55;
   }
 
-  body { margin: 0; min-height: 100vh; background: var(--canvas); }
+  body { margin: 0; min-height: 100vh; background: linear-gradient(180deg, #F6F2FF 0%, #F8F6FF 100%); }
 
   #root { min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -67,51 +79,51 @@
 }
 
 @layer utilities {
-  /* ── Card — clean white, hairline border ── */
+  /* ── Card ── */
   .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1.125rem;
+    background: linear-gradient(180deg, #FFFFFF 0%, #F9F6FF 100%);
+    border: 1px solid rgba(109, 40, 217, 0.15);
+    border-radius: 18px;
+    padding: 1.25rem;
     box-shadow: var(--shadow-sm);
   }
 
   /* ── Buttons ── */
   .btn-primary {
-    background: var(--accent);
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
     color: #fff;
-    padding: 0.5rem 1.125rem;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 0.8125rem;
+    padding: 0.65rem 1.25rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: var(--text-btn);
     border: none;
     cursor: pointer;
-    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+    transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
     display: inline-flex;
     align-items: center;
-    gap: 0.375rem;
-    box-shadow: 0 1px 4px rgba(124,58,237,0.25);
+    gap: 0.4rem;
+    box-shadow: 0 18px 36px rgba(109,40,217,0.16);
     letter-spacing: 0.01em;
   }
-  .btn-primary:hover  { background: var(--accent-dark); transform: translateY(-1px); box-shadow: 0 3px 10px rgba(124,58,237,0.3); }
+  .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 22px 42px rgba(109,40,217,0.2); }
   .btn-primary:active { transform: translateY(0); }
   .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 
   .btn-secondary {
     background: var(--surface);
-    color: var(--text-secondary);
-    padding: 0.5rem 1.125rem;
-    border-radius: 8px;
-    font-weight: 500;
-    font-size: 0.8125rem;
-    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 0.55rem 1.15rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: var(--text-btn);
+    border: 1px solid rgba(109,40,217,0.12);
     cursor: pointer;
     transition: background 0.12s, border-color 0.12s, transform 0.1s;
     display: inline-flex;
     align-items: center;
-    gap: 0.375rem;
+    gap: 0.35rem;
   }
-  .btn-secondary:hover  { background: var(--surface-2); border-color: #D1CFC9; transform: translateY(-1px); }
+  .btn-secondary:hover  { background: var(--surface-2); border-color: rgba(109,40,217,0.22); transform: translateY(-1px); }
   .btn-secondary:active { transform: translateY(0); }
   .btn-secondary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
@@ -123,7 +135,7 @@
     border-radius: 8px;
     background: var(--surface);
     color: var(--text-primary);
-    font-size: 0.8125rem;
+    font-size: var(--text-input);
     font-family: inherit;
     transition: border-color 0.12s, box-shadow 0.12s;
   }
@@ -137,7 +149,7 @@
   /* ── Label ── */
   .label {
     display: block;
-    font-size: 0.73rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 0.3rem;
@@ -151,15 +163,15 @@
     align-items: center;
     padding: 0.15rem 0.55rem;
     border-radius: 999px;
-    font-size: 0.7rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.02em;
   }
 
   /* ── Prose ── */
   .prose-neurosync {
-    line-height: 1.7;
-    font-size: 0.875rem;
+    line-height: 1.75;
+    font-size: var(--text-base);
     color: var(--text-primary);
   }
   .prose-neurosync h1,.prose-neurosync h2,.prose-neurosync h3 {
@@ -193,10 +205,10 @@
 
   /* ── Section header ── */
   .section-header {
-    background: var(--surface-2);
-    border-radius: 10px;
-    padding: 0.875rem 1.125rem;
-    border: 1px solid var(--border);
-    margin-bottom: 1.25rem;
+    background: linear-gradient(180deg, var(--surface-2) 0%, #F5EFFF 100%);
+    border-radius: 16px;
+    padding: 1rem 1.25rem;
+    border: 1px solid rgba(109,40,217,0.12);
+    margin-bottom: 1.5rem;
   }
 }
