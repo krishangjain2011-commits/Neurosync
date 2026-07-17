@@ -1017,15 +1017,18 @@ async function startServer() {
 - Diagnoses: ${profile.diagnoses?.join(", ") || "Not specified"}
 - Known sensory triggers: ${profile.sensoryTriggers?.join(", ") || "None noted"}
 - Previously confirmed communication cues: ${confirmedCues.map((c: any) => `"${c.label}"`).join(", ") || "None yet"}
-${mediaDescription ? `\nCaregiver's description of what they observed: "${mediaDescription}"` : ""}
+${profile.otherDetails ? `- Additional caregiver notes: ${profile.otherDetails}` : ""}
+- Audio context: this clip did not match any saved cue and is currently unknown.
+${mediaDescription ? `- Caregiver's description: ${mediaDescription}` : "- Caregiver's description: none provided."}
 
-You are helping a caregiver understand what a child with neurodevelopmental needs may be communicating.
-Provide exactly 6 distinct, plausible interpretations of what this child may be communicating.
-Never state a single definitive interpretation as fact. Never offer a medical or diagnostic conclusion.
-Frame all results as possibilities for the caregiver to judge against their own knowledge of the child.
-Return as a JSON array of 6 strings, ranked by likelihood.
-Example: ["may be signaling hunger", "may indicate sensory overload", ...]
-Return ONLY the JSON array, no other text.`;
+You are NeuroSync, an empathetic AI caregiving assistant.
+A caregiver heard an unfamiliar sound or vocalisation from a child with neurodevelopmental needs.
+Based on the child's profile, sensory triggers, existing confirmed cues, and any available description, suggest exactly 6 different, plausible interpretations for what the child may be communicating.
+Use plain, everyday language and keep each answer short.
+Do not claim certainty. Do not offer medical diagnoses or clinical conclusions.
+If the sound is unknown, focus on likely needs, feelings, or environmental causes rather than precise labels.
+Return ONLY a JSON array with 6 strings.
+Example: ["may be signaling hunger", "may be feeling overwhelmed by noise", ...]`;
 
     try {
       let interpretations: string[] = [];
@@ -1271,6 +1274,7 @@ Child context:
 - Name: ${profile.childName ?? "the child"}
 - Age: ${profile.childAge ?? "unknown"}
 - Diagnoses: ${profile.diagnoses?.join(", ") || "Not specified"}
+${profile.otherDetails ? `- Additional notes: ${profile.otherDetails}` : ""}
 
 Analyze the handwriting in this image and return ONLY valid JSON in this exact structure:
 {
