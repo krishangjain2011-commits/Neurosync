@@ -258,7 +258,7 @@ export default function Layout() {
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 1024 576"
             preserveAspectRatio="xMidYMid slice"
-            style={{ width: "100%", height: "100%", opacity: 0.09 }}
+            style={{ width: "100%", height: "100%", opacity: 0.16, filter: "brightness(0.72)" }}
           >
             <defs>
               <linearGradient id="arcL" x1="0%" y1="100%" x2="100%" y2="0%">

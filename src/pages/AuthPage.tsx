@@ -49,7 +49,7 @@ export default function AuthPage() {
         preserveAspectRatio="xMidYMid slice"
         style={{
           position: "absolute", inset: 0, width: "100%", height: "100%",
-          opacity: 0.09, pointerEvents: "none",
+          opacity: 0.16, filter: "brightness(0.72)", pointerEvents: "none",
         }}
       >
         <defs>
