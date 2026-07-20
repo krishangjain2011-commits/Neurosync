@@ -63,15 +63,12 @@
     line-height: 1.55;
   }
 
-  body { margin: 0; min-height: 100vh; background: linear-gradient(180deg, #F6F2FF 0%, #F8F6FF 100%); }
+  body { margin: 0; min-height: 100vh; background: transparent; }
 
-  #root { min-height: 100vh; display: flex; flex-direction: column; }
+  #root { min-height: 100vh; display: flex; flex-direction: column; background: linear-gradient(180deg, #F6F2FF 0%, #F8F6FF 100%); position: relative; z-index: 1; }
 
-  /* Backdrop image (full-app) - place backdrop image at project root or public folder as /backdrop.jpg */
-  #root { position: relative; z-index: 1; }
-
-  body::before {
-    content: "";
+  /* Backdrop element (fixed behind app content) */
+  #backdrop {
     position: fixed;
     inset: 0;
     /* Prefer local optimized WebP, then local JPG, then article image, then hosted fallback */
@@ -80,7 +77,6 @@
     background-position: center center;
     background-repeat: no-repeat;
     filter: brightness(0.58) saturate(0.95);
-    opacity: 1;
     z-index: 0;
     pointer-events: none;
   }
