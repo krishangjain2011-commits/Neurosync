@@ -67,6 +67,23 @@
 
   #root { min-height: 100vh; display: flex; flex-direction: column; }
 
+  /* Backdrop image (full-app) - place backdrop image at project root or public folder as /backdrop.jpg */
+  #root { position: relative; z-index: 1; }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: url('/backdrop.jpg');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    filter: brightness(0.58) saturate(0.95);
+    opacity: 1;
+    z-index: 0;
+    pointer-events: none;
+  }
+
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }

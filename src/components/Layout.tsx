@@ -250,53 +250,7 @@ export default function Layout() {
       {/* Main content area — scrolls independently */}
       <main style={{ flex: 1, overflowY: "auto", overflowX: "hidden", position: "relative", minHeight: "100vh" }}>
 
-        {/* Background illustration — fixed, low opacity */}
-        <div aria-hidden="true" style={{
-          position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden",
-        }}>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 1024 576"
-            preserveAspectRatio="xMidYMid slice"
-            style={{ width: "100%", height: "100%", opacity: 0.16, filter: "brightness(0.72)" }}
-          >
-            <defs>
-              <linearGradient id="arcL" x1="0%" y1="100%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#F97316" />
-                <stop offset="100%" stopColor="#EF4444" />
-              </linearGradient>
-              <linearGradient id="arcR" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#06B6D4" />
-                <stop offset="100%" stopColor="#8B5CF6" />
-              </linearGradient>
-              <radialGradient id="shadowL" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#C4B5FD" stopOpacity="0.5" />
-                <stop offset="100%" stopColor="#C4B5FD" stopOpacity="0" />
-              </radialGradient>
-              <radialGradient id="shadowR" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#99F6E4" stopOpacity="0.4" />
-                <stop offset="100%" stopColor="#99F6E4" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <line x1="160" y1="430" x2="860" y2="430" stroke="#9CA3AF" strokeWidth="1" />
-            <ellipse cx="310" cy="445" rx="160" ry="28" fill="url(#shadowL)" />
-            <ellipse cx="700" cy="445" rx="160" ry="28" fill="url(#shadowR)" />
-            <path d="M 155 260 A 185 185 0 0 1 480 60" fill="none" stroke="url(#arcL)" strokeWidth="16" strokeLinecap="round" />
-            <path d="M 555 65 A 185 185 0 0 1 878 262" fill="none" stroke="url(#arcR)" strokeWidth="16" strokeLinecap="round" />
-            <circle cx="298" cy="268" r="36" fill="#7C3AED" />
-            <ellipse cx="298" cy="370" rx="34" ry="58" fill="#7C3AED" />
-            <circle cx="366" cy="312" r="26" fill="#16A34A" />
-            <ellipse cx="366" cy="398" rx="24" ry="40" fill="#16A34A" />
-            <circle cx="598" cy="310" r="28" fill="#EA580C" />
-            <ellipse cx="598" cy="396" rx="26" ry="42" fill="#EA580C" />
-            <circle cx="672" cy="262" r="38" fill="#2563EB" />
-            <ellipse cx="672" cy="368" rx="36" ry="60" fill="#2563EB" />
-            <circle cx="112" cy="155" r="6" fill="#EF4444" opacity="0.6" />
-            <circle cx="210" cy="108" r="4" fill="#F97316" opacity="0.5" />
-            <circle cx="850" cy="175" r="5" fill="#06B6D4" opacity="0.5" />
-            <circle cx="820" cy="290" r="6" fill="#16A34A" opacity="0.5" />
-          </svg>
-        </div>
+        {/* Background image is handled globally via CSS (body::before) */}
 
         {/* Page content */}
         <div style={{ position: "relative", zIndex: 1, minHeight: "100%" }}>
