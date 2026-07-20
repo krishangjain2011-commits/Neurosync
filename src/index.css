@@ -74,7 +74,8 @@
     content: "";
     position: fixed;
     inset: 0;
-    background-image: url('/backdrop.jpg');
+    /* Try local backdrop first; fall back to a hosted image so Render shows something immediately */
+    background-image: url('/backdrop.jpg'), url('https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=1600&q=80');
     background-size: cover;
     background-position: center center;
     background-repeat: no-repeat;
