@@ -79,7 +79,7 @@
     content: '';
     position: fixed;
     inset: 0;
-    background: rgba(247, 244, 255, 0.72);
+    background: rgba(247, 244, 255, 0.45);
     pointer-events: none;
     z-index: 0;
   }
