@@ -1425,6 +1425,8 @@ OUTPUT ONLY THE JSON OBJECT. NO OTHER TEXT.`;
         "llama-4-maverick-17b-128e-instruct",
       ];
       let lastErr: any = null;
+      let visionFailed = false;
+      
       for (const modelName of candidateModels) {
         try {
           completion = await client.chat.completions.create({
@@ -1449,8 +1451,38 @@ OUTPUT ONLY THE JSON OBJECT. NO OTHER TEXT.`;
         } catch (err: any) {
           lastErr = err;
           const code = err?.error?.error?.code || err?.code || err?.status;
-          if (code === "model_not_found" || code === 404 || code === "model_decommissioned") continue;
+          console.warn(`[handwriting] Model ${modelName} not available (${code})`);
+          if (code === "model_not_found" || code === 404 || code === "model_decommissioned" || code === 401 || code === 403) {
+            visionFailed = true;
+            continue;
+          }
           throw err;
+        }
+      }
+
+      // If all vision models fail, fall back to text-based analysis via standard LLM
+      if (!completion && visionFailed) {
+        console.warn("[handwriting] All vision models failed, using text fallback analysis");
+        try {
+          completion = await client.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [
+              {
+                role: "user",
+                content: systemPrompt + "\n" + `You are analyzing a handwriting image. Since vision models are unavailable, please provide a placeholder analysis:\n\n${prompt}`,
+              },
+            ],
+            temperature: 0.0,
+            max_tokens: 512,
+          });
+          console.log(`[handwriting] Used fallback model: llama-3.3-70b-versatile`);
+        } catch (fallbackErr: any) {
+          console.error("[handwriting] Fallback also failed:", fallbackErr);
+          return res.status(503).json({
+            error: "Handwriting analysis temporarily unavailable. Vision models are not accessible on this account.",
+            code: "VISION_UNAVAILABLE",
+            help: "Please contact Groq support to enable vision model access for your account.",
+          });
         }
       }
 
