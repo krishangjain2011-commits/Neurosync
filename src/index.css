@@ -62,6 +62,31 @@
     line-height: 1.55;
   }
 
+  :root[data-theme="high-contrast"] {
+    --canvas: #000000;
+    --surface: #151515;
+    --surface-2: #1f1f1f;
+    --border: #FFFFFF;
+    --border-soft: #AAAAAA;
+    --text-primary: #FFFFFF;
+    --text-secondary: #F4F4F4;
+    --text-muted: #D6D6D6;
+    --accent: #FACC15;
+    --accent-light: #FDE68A;
+    --accent-dark: #D97706;
+    --green: #86EFAC;
+    --green-light: #134E4A;
+    --amber: #F59E0B;
+    --amber-light: #78350F;
+    --red: #F87171;
+    --red-light: #991B1B;
+    --blue: #60A5FA;
+    --blue-light: #1D4ED8;
+    --shadow-sm: 0 0 0 transparent;
+    --shadow-md: 0 0 0 transparent;
+    --shadow-lg: 0 0 0 transparent;
+  }
+
   body {
     margin: 0;
     min-height: 100vh;
@@ -79,7 +104,8 @@
     content: '';
     position: fixed;
     inset: 0;
-    background: rgba(247, 244, 255, 0.45);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(8px);
     pointer-events: none;
     z-index: 0;
   }
@@ -92,7 +118,7 @@
     flex-direction: column;
     position: relative;
     z-index: 1;
-    background: transparent;
+    background: rgba(255, 255, 255, 0.96);
   }
 
   ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -109,11 +135,11 @@
 @layer utilities {
   /* ── Card ── */
   .card {
-    background: linear-gradient(180deg, #FFFFFF 0%, #F9F6FF 100%);
-    border: 1px solid rgba(109, 40, 217, 0.15);
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid rgba(109, 40, 217, 0.18);
     border-radius: 18px;
     padding: 1.25rem;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 24px 50px rgba(45, 15, 80, 0.12);
   }
 
   /* ── Buttons ── */

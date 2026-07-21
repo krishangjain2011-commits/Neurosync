@@ -158,7 +158,7 @@ export default function ReportsPage() {
       <html><head>
         <title>NeuroSync Report — ${report?.child.name}</title>
         <style>
-          body { font-family: Georgia, serif; padding: 2rem; color: #2C1F14; max-width: 800px; margin: 0 auto; }
+          body { font-family: Georgia, serif; padding: 2rem; color: #2C1F14; max-width: 800px; margin: 0 auto; background:#fff; }
           h1 { font-size: 1.5rem; color: #8B5CF6; margin-bottom: 0.25rem; }
           h2 { font-size: 1.1rem; border-bottom: 1px solid #E8DCCF; padding-bottom: 0.3rem; margin-top: 1.5rem; }
           h3 { font-size: 0.95rem; margin: 0.75rem 0 0.3rem; color: #6B4F38; }
@@ -175,6 +175,62 @@ export default function ReportsPage() {
     win.document.close();
     win.focus();
     setTimeout(() => win.print(), 400);
+  };
+
+  const exportCsvValue = (value: unknown) => {
+    const str = value === null || value === undefined ? "" : String(value);
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+
+  const buildExportCsv = () => {
+    const rows: Array<{ section: string; key: string; value: string }> = [];
+
+    if (user) {
+      rows.push({ section: "user", key: "email", value: user.email });
+      rows.push({ section: "user", key: "displayName", value: user.displayName ?? "" });
+      rows.push({ section: "user", key: "role", value: user.role });
+      rows.push({ section: "user", key: "preferredLanguage", value: user.preferredLanguage });
+    }
+    rows.push({ section: "session", key: "activeChildId", value: String(activeChild?.id ?? "") });
+    rows.push({ section: "session", key: "activeChildName", value: activeChild?.onboarding_data?.childName ?? "" });
+
+    if (report) {
+      rows.push({ section: "report", key: "generatedAt", value: report.generatedAt });
+      rows.push({ section: "report", key: "childName", value: report.child.name });
+      rows.push({ section: "report", key: "childAge", value: report.child.age ? String(report.child.age) : "" });
+      rows.push({ section: "report", key: "diagnoses", value: report.child.diagnoses.join("; ") });
+      rows.push({ section: "report", key: "sensoryTriggers", value: report.child.sensoryTriggers.join("; ") });
+      rows.push({ section: "report", key: "strengths", value: report.child.strengths.join("; ") });
+      rows.push({ section: "report", key: "goals", value: report.child.goals.join("; ") });
+      Object.entries(report.progressSummary).forEach(([metric, data]) => {
+        rows.push({ section: "progressSummary", key: metric, value: `latest=${data.latest};count=${data.count};avg=${data.avg}` });
+      });
+      report.recentProgress.forEach((item, index) => {
+        rows.push({ section: "recentProgress", key: `${index + 1}.${item.metric_type}`, value: `${item.value} @ ${item.timestamp}` });
+      });
+    }
+
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith("neurosync_"))
+      .forEach((key) => rows.push({ section: "localStorage", key, value: localStorage.getItem(key) ?? "" }));
+
+    const header = ["section", "key", "value"].map(exportCsvValue).join(",");
+    const body = rows.map((row) => [exportCsvValue(row.section), exportCsvValue(row.key), exportCsvValue(row.value)].join(",")).join("\n");
+    return `${header}\n${body}`;
+  };
+
+  const handleExportCsv = () => {
+    const csv = buildExportCsv();
+    const blob = new Blob([csv], { type: "text/csv;charset=UTF-8" });
+    const url = URL.createObjectURL(blob);
+    const fileName = `neurosync-export-${(activeChild?.onboarding_data?.childName ?? "user").replace(/\s+/g, "_")}-${new Date().toISOString().slice(0, 10)}.csv`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const childName = activeChild?.onboarding_data?.childName ?? "Child";
@@ -206,7 +262,7 @@ export default function ReportsPage() {
         tips={[
           "Click 'Generate AI Narrative' for a professional summary paragraph ready to share with a specialist.",
           "Print the report using the Print button — it formats cleanly for A4.",
-          "Email the report directly to an institution using the email field (requires Resend API key).",
+          "Email the report directly to an institution using the email field (requires SMTP configuration).",
           "Share tab: grant a worker or teacher access to your child's profile using their email — they must have a NeuroSync account.",
           "You can revoke access at any time from the Share tab.",
         ]}
@@ -246,6 +302,9 @@ export default function ReportsPage() {
             </button>
             <button className="btn-secondary" onClick={fetchNarrative} disabled={loadingNarrative || !childId}>
               {loadingNarrative ? "Generating…" : "✨ Generate AI Summary"}
+            </button>
+            <button className="btn-secondary" onClick={handleExportCsv} disabled={!user}>
+              📥 Export local CSV
             </button>
             {report && (
               <button className="btn-secondary" onClick={handlePrint}>

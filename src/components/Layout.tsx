@@ -4,11 +4,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useOffline } from "../context/OfflineContext";
 import { useLang } from "../context/LangContext";
+import { useTheme } from "../context/ThemeContext";
 
 export default function Layout() {
   const { user, activeChild, setActiveChild, logout } = useAuth();
   const { isOnline, pendingCount } = useOffline();
   const { t, lang, setLang, supportedLanguages } = useLang();
+  const { theme, setTheme, supportedThemes } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -53,15 +55,17 @@ export default function Layout() {
       {/* Child selector */}
       {user && user.children.length > 0 && (
         <div style={{ marginBottom: "1.25rem", padding: "0 0.25rem" }}>
-          <div style={{ fontSize: "0.667rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.35rem", padding: "0 0.25rem" }}>
+          <label htmlFor="child-select" style={{ fontSize: "0.667rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.35rem", display: "block", padding: "0 0.25rem" }}>
             {t("activeChild")}
-          </div>
+          </label>
           <select
+            id="child-select"
             value={activeChild?.id ?? ""}
             onChange={e => {
               const child = user.children.find(c => c.id === parseInt(e.target.value, 10));
               setActiveChild(child ?? null);
             }}
+            aria-label={t("activeChild")}
             style={{
               width: "100%", padding: "0.4rem 0.55rem", borderRadius: "7px",
               border: "1px solid var(--border)", background: "var(--surface)",
@@ -76,6 +80,7 @@ export default function Layout() {
             ))}
           </select>
           <button
+            type="button"
             onClick={() => { navigate("/add-child"); setSidebarOpen(false); }}
             style={{
               marginTop: "0.3rem", width: "100%", padding: "0.3rem 0.55rem",
@@ -136,7 +141,9 @@ export default function Layout() {
           {supportedLanguages.map(l => (
             <button
               key={l.code}
+              type="button"
               onClick={() => setLang(l.code)}
+              aria-label={`${t("language")}: ${l.nativeLabel}`}
               style={{
                 flex: 1, padding: "0.3rem 0.2rem", borderRadius: "6px",
                 border: `1px solid ${lang === l.code ? "var(--accent)" : "var(--border)"}`,
@@ -147,6 +154,34 @@ export default function Layout() {
               }}
             >{l.nativeLabel}</button>
           ))}
+        </div>
+      </div>
+
+      {/* Theme switcher */}
+      <div style={{ padding: "0.75rem 0.25rem", borderTop: "1px solid var(--border)", marginTop: "0.75rem" }}>
+        <div style={{ fontSize: "0.667rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.35rem", padding: "0 0.25rem" }}>
+          {t("theme")}
+        </div>
+        <div style={{ display: "flex", gap: "0.25rem" }}>
+          {supportedThemes.map(themeOption => {
+            const label = themeOption.value === "high-contrast" ? t("themeHighContrast") : t("themeNormal");
+            return (
+              <button
+                key={themeOption.value}
+                type="button"
+                onClick={() => setTheme(themeOption.value)}
+                aria-label={`${t("theme")}: ${label}`}
+                style={{
+                  flex: 1, padding: "0.3rem 0.2rem", borderRadius: "6px",
+                  border: `1px solid ${theme === themeOption.value ? "var(--accent)" : "var(--border)"}`,
+                  background: theme === themeOption.value ? "var(--accent-light)" : "transparent",
+                  color: theme === themeOption.value ? "var(--accent)" : "var(--text-muted)",
+                  fontSize: "0.722rem", fontWeight: theme === themeOption.value ? 700 : 500,
+                  cursor: "pointer",
+                }}
+              >{label}</button>
+            );
+          })}
         </div>
       </div>
 

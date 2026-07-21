@@ -60,8 +60,14 @@ In **Render dashboard → Environment tab**, add:
 | `GROQ_API_KEY` | Free key from [console.groq.com](https://console.groq.com) | ✅ Yes |
 | `GROQ_MODEL` | `llama-3.3-70b-versatile` | auto-set |
 | `GROQ_VISION_MODEL` | `meta-llama/llama-4-scout-17b-16e-instruct` | optional |
+| `SMTP_HOST` | SMTP relay hostname | Optional |
+| `SMTP_PORT` | SMTP relay port | Optional |
+| `SMTP_SECURE` | `true` or `false` | Optional |
+| `SMTP_USER` | SMTP username | Optional |
+| `SMTP_PASS` | SMTP password | Optional |
+| `SMTP_FROM` | Optional sender address override | Optional |
+| `ADMIN_REPORT_EMAIL` | Your email for receiving automatic CSV exports | optional |
 | `NODE_ENV` | `production` | auto-set |
-| `RESEND_API_KEY` | From [resend.com](https://resend.com) — for email reports | Optional |
 | `DB_PATH` | `/data/neurosync.db` (add paid Disk) or `/tmp/neurosync.db` | Optional |
 | `UPLOADS_DIR` | `/data/uploads` (paid Disk) or `/tmp/uploads` | Optional |
 

@@ -29,11 +29,8 @@ export default defineConfig({
   },
   server: {
     hmr: process.env.DISABLE_HMR !== 'true',
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-    },
+    // Note: API proxy is disabled in dev mode because the Express server
+    // handles both API and frontend in middleware mode on the same port.
+    // Vite's dev server doesn't need to proxy /api requests.
   },
 });

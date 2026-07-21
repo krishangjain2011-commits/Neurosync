@@ -27,6 +27,9 @@ const translations = {
     activeChild: "Active Child",
     addChildProfile: "Add child profile",
     language: "Language",
+    theme: "Theme",
+    themeNormal: "Normal Contrast",
+    themeHighContrast: "High Contrast",
 
     // ── Auth ───────────────────────────────────────────────────────────────
     signIn: "Sign In",
@@ -41,7 +44,7 @@ const translations = {
     yourName: "Your name",
     namePlaceholder: "e.g. Priya Sharma",
     preferredLanguage: "Preferred language",
-    authDisclaimer: "Data stored locally. Never shared with third parties.\nNeuroSync does not provide medical diagnoses.",
+    authDisclaimer: "Your login and app data stay on this device. Never shared with third parties.\nNeuroSync does not provide medical diagnoses.",
 
     // ── Onboarding ─────────────────────────────────────────────────────────
     setupChildProfile: "Set up your child's profile",
@@ -254,6 +257,9 @@ const translations = {
     activeChild: "सक्रिय बच्चा",
     addChildProfile: "बच्चे की प्रोफ़ाइल जोड़ें",
     language: "भाषा",
+    theme: "थीम",
+    themeNormal: "साधारण कंट्रास्ट",
+    themeHighContrast: "उच्च कंट्रास्ट",
 
     // ── Auth ───────────────────────────────────────────────────────────────
     signIn: "साइन इन करें",

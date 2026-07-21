@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { OfflineProvider } from "./context/OfflineContext";
 import { LangProvider, useLang } from "./context/LangContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import Layout from "./components/Layout";
 import AuthPage from "./pages/AuthPage";
 import OnboardingPage from "./pages/OnboardingPage";
@@ -88,11 +89,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <LangProvider>
-      <AuthProvider>
-        <OfflineProvider>
-          <AppRoutes />
-        </OfflineProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <OfflineProvider>
+            <AppRoutes />
+          </OfflineProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </LangProvider>
   );
 }

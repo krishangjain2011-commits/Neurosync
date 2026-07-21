@@ -55,7 +55,7 @@ const ML_SIDECAR_URL = process.env.ML_SIDECAR_URL ?? "http://localhost:8000";
 // purgeStaleCueMedia() hard-deletes files after 30 days (DPDP §8).
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR ?? path.join(__dirname, "uploads");
-const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL ?? "llama-3.2-11b-vision-preview";
+const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL ?? "meta-llama/llama-4-scout-17b-16e-instruct";
 
 const audioStorage = (multer as any).diskStorage({
   destination: (req: express.Request, _file: any, cb: Function) => {
@@ -191,25 +191,118 @@ setInterval(purgeStaleCueMedia, 1000 * 60 * 60 * 24); // daily
 
 // MODEL and getGenAI() are handled inside lib/ai-client.ts
 
+// Parse handwriting analysis from markdown if JSON fails
+function parseHandwritingFromMarkdown(text: string): any {
+  // Split into lines and categorize by type
+  const lines: string[] = [];
+  const textLines = text.split('\n');
+  
+  let inAnalysisSection = false;
+  let inTranscriptionSection = false;
+  
+  for (const line of textLines) {
+    const trimmed = line.trim();
+    
+    // Skip empty lines, headers, section markers
+    if (!trimmed || trimmed.startsWith('#') || trimmed.match(/^[*_-]{3,}$/) || trimmed.startsWith('**')) {
+      continue;
+    }
+    
+    // Detect section markers (these indicate analysis, not transcription)
+    if (trimmed.match(/^(analysis|pattern|observation|note|comment|metadata):/i)) {
+      inAnalysisSection = true;
+      inTranscriptionSection = false;
+      continue;
+    }
+    
+    // Detect if this looks like actual handwritten content section
+    if (trimmed.match(/^(transcription|written|handwritten|text|reading|what was written|actual content)/i)) {
+      inTranscriptionSection = true;
+      inAnalysisSection = false;
+      continue;
+    }
+    
+    // Skip lines that are clearly analysis/explanation
+    if (trimmed.match(/^(the|this|this image|the handwriting|the child|the student|appears|shows|looks|seems|appears to be|likely|probably|may|might)/i)
+        || trimmed.match(/caregiver|diagnostic|analysis|observe|characterize|exhibit/i)) {
+      continue;
+    }
+    
+    // Extract actual content from list items
+    let content = trimmed
+      .replace(/^[-•*+]\s+/, '')  // Remove list markers
+      .replace(/^\d+[\d.)\s:-]*/, '')  // Remove numbered list markers
+      .replace(/^(?:line|word|text|item|note)[\s\d.:-]*/i, '')  // Remove line/word labels
+      .replace(/^["']([^"']+)["'].*/, '$1')  // Extract quoted text
+      .replace(/^-\s+/, '')  // Remove dashes
+      .trim();
+    
+    // Quality checks for actual handwritten content
+    const hasLetters = /[a-zA-Z]/.test(content);
+    const hasWords = /\w{2,}/.test(content);
+    const isNotMetadata = !content.match(/^[*_\-`#]/) && !content.includes('**');
+    const isReasonableLength = content.length > 0 && content.length < 500;
+    const notAnalysisContent = !content.match(/reversal|phonetic|spacing|sizing|pattern|observed|appears|shows/i);
+    
+    if (hasLetters && hasWords && isNotMetadata && isReasonableLength && notAnalysisContent) {
+      lines.push(content);
+      console.log(`[handwriting-parser] Found content: "${content.substring(0, 60)}"`);
+    }
+  }
+  
+  console.log(`[handwriting-parser] Extracted ${lines.length} content lines from markdown`);
+  
+  // If we found content lines, use them; otherwise fall back to generic message
+  const rawTranscription = lines.length > 0 
+    ? lines.slice(0, 8).join(' ').substring(0, 500)
+    : "No transcription extracted";
+    
+  const interpretedText = lines.length > 0
+    ? lines.slice(0, 5).join(' ').substring(0, 500)
+    : "Unable to interpret";
+
+  console.log(`[handwriting-parser] Final extraction - Raw: "${rawTranscription.substring(0, 100)}"`);
+
+  return {
+    raw_transcription: rawTranscription,
+    interpreted_text: interpretedText,
+    b_d_reversals: text.match(/\b[bd].*?[bd]|reversal|swap|confusion/i) ? 1 : 0,
+    p_q_reversals: text.match(/\b[pq].*?[pq]/i) ? 1 : 0,
+    other_reversals: [],
+    phonetic_substitutions: [],
+    spacing_irregular: text.match(/spacing|irregular|space|scatter|inconsistent spacing/i) ? true : false,
+    sizing_inconsistent: text.match(/sizing|inconsistent|size|vary|varied size/i) ? true : false,
+    observations: lines.length > 0 ? `${lines.length} lines extracted` : "Unable to extract text"
+  };
+}
+
 // Self-healing JSON repair with telemetry
 function repairJson(raw: string, endpoint: string): { result: string; repaired: boolean } {
-  let s = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  let s = raw.trim();
+  
+  // Remove markdown code blocks if present
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  
   const original = s;
   const opens: string[] = [];
   const pairs: Record<string, string> = { "{": "}", "[": "]" };
   const closes = new Set(["}", "]"]);
+  
   for (const ch of s) {
     if (pairs[ch]) opens.push(pairs[ch]);
     else if (closes.has(ch) && opens[opens.length - 1] === ch) opens.pop();
   }
+  
+  // Fix common JSON issues
   const quoteCount = (s.match(/(?<!\\)"/g) || []).length;
   if (quoteCount % 2 !== 0) s += '"';
   s = s.replace(/,\s*([\]}])/g, "$1");
   while (opens.length) s += opens.pop();
+  
   const repaired = s !== original;
   if (repaired) {
     db.prepare("INSERT INTO ai_repair_log (endpoint, repaired) VALUES (?,1)").run(endpoint);
-    console.warn(`[AI] JSON repair triggered on ${endpoint}`);
+    console.warn(`[JSON] Repair on ${endpoint}`);
   }
   return { result: s, repaired };
 }
@@ -1285,33 +1378,25 @@ Example: ["may be signaling hunger", "may be feeling overwhelmed by noise", ...]
     const child: any = db.prepare("SELECT onboarding_data FROM children_profiles WHERE id=?").get(childId);
     const profile = child?.onboarding_data ? JSON.parse(child.onboarding_data) : {};
 
+    const systemPrompt = `You are a handwriting transcription assistant. Output ONLY valid JSON. Do NOT include any markdown, analysis text, thinking, or explanations. Output ONLY the JSON object, nothing before or after.`;
+    
     const prompt =
-      `${HW_SYSTEM_PROMPT}
+      `CRITICAL: Look at the handwriting in the image and output ONLY JSON. Do not explain, analyze, or add text outside the JSON.
 
-Child context:
-- Name: ${profile.childName ?? "the child"}
-- Age: ${profile.childAge ?? "unknown"}
-- Diagnoses: ${profile.diagnoses?.join(", ") || "Not specified"}
-${profile.otherDetails ? `- Additional notes: ${profile.otherDetails}` : ""}
-
-Analyze the handwriting in this image and return ONLY valid JSON in this exact structure:
+Transcribe exactly what is written. Output:
 {
-  "raw_transcription": "exact literal reading of what is written, character by character",
-  "interpreted_text": "your best guess at what the child intended to write, with corrections",
-  "flagged_patterns": {
-    "b_d_reversals": 0,
-    "p_q_reversals": 0,
-    "other_reversals": [],
-    "phonetic_substitutions": [],
-    "spacing_irregular": false,
-    "sizing_inconsistent": false,
-    "observations": "one sentence of supportive, non-diagnostic observations"
-  }
+  "raw_transcription": "EXACT words written in the image",
+  "interpreted_text": "corrected spelling of what was written",
+  "b_d_reversals": 0,
+  "p_q_reversals": 0,
+  "other_reversals": [],
+  "phonetic_substitutions": [],
+  "spacing_irregular": false,
+  "sizing_inconsistent": false,
+  "observations": "brief note"
 }
 
-Do not include any extra fields, markdown, bullet points, or explanation.
-If you cannot read the handwriting, return empty strings for text fields, empty arrays for lists, and false for booleans.
-`;
+OUTPUT ONLY THE JSON OBJECT. NO OTHER TEXT.`;
 
     try {
       // Use Groq vision (meta-llama/llama-4-scout-17b-16e-instruct) — same API key, no Gemini needed.
@@ -1333,7 +1418,12 @@ If you cannot read the handwriting, return empty strings for text fields, empty 
       const client = new GroqClient({ apiKey: groqKey });
 
       let completion;
-      const candidateModels = [GROQ_VISION_MODEL, "llama-3.2-90b-vision-preview", "meta-llama/llama-4-scout-17b-16e-instruct"];
+      const candidateModels = [
+        GROQ_VISION_MODEL,
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "llama-4-scout-17b-16e-instruct",
+        "llama-4-maverick-17b-128e-instruct",
+      ];
       let lastErr: any = null;
       for (const modelName of candidateModels) {
         try {
@@ -1343,7 +1433,7 @@ If you cannot read the handwriting, return empty strings for text fields, empty 
               {
                 role: "user",
                 content: [
-                  { type: "text", text: prompt },
+                  { type: "text", text: systemPrompt + "\n" + prompt },
                   {
                     type: "image_url",
                     image_url: { url: `data:${mimeType};base64,${base64Clean}` },
@@ -1353,13 +1443,13 @@ If you cannot read the handwriting, return empty strings for text fields, empty 
             ],
             temperature: 0.0,
             max_tokens: 1024,
-            response_format: { type: "json_object" },
           });
+          console.log(`[handwriting] Used model: ${modelName}`);
           break;
         } catch (err: any) {
           lastErr = err;
           const code = err?.error?.error?.code || err?.code || err?.status;
-          if (code === "model_not_found" || code === 404) continue;
+          if (code === "model_not_found" || code === 404 || code === "model_decommissioned") continue;
           throw err;
         }
       }
@@ -1374,39 +1464,77 @@ If you cannot read the handwriting, return empty strings for text fields, empty 
 
       let rawMessage = completion.choices[0]?.message?.content ?? "";
       let raw = typeof rawMessage === "string" ? rawMessage : JSON.stringify(rawMessage);
-      const { result: repaired } = repairJson(raw, "/api/handwriting");
-
-      let parsed: any = {};
-      try {
-        parsed = JSON.parse(repaired);
-      } catch (err) {
-        console.error("[handwriting] JSON parse failed after structured response:", err, repaired);
-        return res.status(502).json({
-          error: "Vision service returned malformed JSON despite structured format.",
-          raw: repaired,
-        });
+      
+      console.log(`[handwriting-raw] First 200 chars: ${raw.substring(0, 200)}`);
+      
+      // AGGRESSIVE tag stripping (multiple passes to ensure complete removal)
+      raw = raw.replace(/<think[\s\S]*?<\/think>/gi, "").trim();
+      raw = raw.replace(/<thinking[\s\S]*?<\/thinking>/gi, "").trim();
+      raw = raw.replace(/^<think>[\s\S]*?<\/think>$/gm, "").trim();
+      raw = raw.replace(/^<thinking>[\s\S]*?<\/thinking>$/gm, "").trim();
+      
+      // Also remove any stray <think> or <thinking> blocks not properly closed
+      raw = raw.replace(/<think\b[^>]*>[\s\S]*?(?=(?:<\/think>|$))/gi, "").trim();
+      raw = raw.replace(/<thinking\b[^>]*>[\s\S]*?(?=(?:<\/thinking>|$))/gi, "").trim();
+      
+      console.log(`[handwriting-after-strip] First 200 chars: ${raw.substring(0, 200)}`);
+      
+      // Find JSON object by locating first { and last }
+      const firstBrace = raw.indexOf("{");
+      const lastBrace = raw.lastIndexOf("}");
+      
+      let parsed: any = null;
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        // Extract and parse JSON
+        const jsonStr = raw.substring(firstBrace, lastBrace + 1);
+        const { result: repaired } = repairJson(jsonStr, "/api/handwriting");
+        try {
+          parsed = JSON.parse(repaired);
+          console.log(`[handwriting] Successfully parsed JSON from response`);
+        } catch (err) {
+          console.warn("[handwriting] JSON parse failed, using fallback");
+        }
       }
+      
+      // If JSON extraction/parsing failed, parse markdown response
+      if (!parsed) {
+        console.warn("[handwriting] No JSON found, parsing markdown response");
+        parsed = parseHandwritingFromMarkdown(raw);
+        console.log(`[handwriting] Parsed from markdown: transcription="${parsed.raw_transcription.substring(0, 50)}..."`);
+      }
+
+      // Handle both nested (flagged_patterns object) and flattened (direct fields) response formats
+      const getFlaggedPatterns = () => {
+        if (parsed.flagged_patterns) {
+          // Nested format
+          return {
+            b_d_reversals: Number(parsed.flagged_patterns.b_d_reversals ?? 0) || 0,
+            p_q_reversals: Number(parsed.flagged_patterns.p_q_reversals ?? 0) || 0,
+            other_reversals: Array.isArray(parsed.flagged_patterns.other_reversals) ? parsed.flagged_patterns.other_reversals.map(String) : [],
+            phonetic_substitutions: Array.isArray(parsed.flagged_patterns.phonetic_substitutions) ? parsed.flagged_patterns.phonetic_substitutions.map(String) : [],
+            spacing_irregular: Boolean(parsed.flagged_patterns.spacing_irregular ?? false),
+            sizing_inconsistent: Boolean(parsed.flagged_patterns.sizing_inconsistent ?? false),
+            observations: String(parsed.flagged_patterns.observations ?? ""),
+          };
+        } else {
+          // Flattened format (new prompt)
+          return {
+            b_d_reversals: Number(parsed.b_d_reversals ?? 0) || 0,
+            p_q_reversals: Number(parsed.p_q_reversals ?? 0) || 0,
+            other_reversals: Array.isArray(parsed.other_reversals) ? parsed.other_reversals.map(String) : [],
+            phonetic_substitutions: Array.isArray(parsed.phonetic_substitutions) ? parsed.phonetic_substitutions.map(String) : [],
+            spacing_irregular: Boolean(parsed.spacing_irregular ?? false),
+            sizing_inconsistent: Boolean(parsed.sizing_inconsistent ?? false),
+            observations: String(parsed.observations ?? ""),
+          };
+        }
+      };
 
       const normalized = {
         raw_transcription: String(parsed.raw_transcription ?? parsed.rawTranscription ?? ""),
         interpreted_text: String(parsed.interpreted_text ?? parsed.interpretedText ?? ""),
-        flagged_patterns: {
-          b_d_reversals: Number(parsed.flagged_patterns?.b_d_reversals ?? parsed.flaggedPatterns?.b_d_reversals ?? 0) || 0,
-          p_q_reversals: Number(parsed.flagged_patterns?.p_q_reversals ?? parsed.flaggedPatterns?.p_q_reversals ?? 0) || 0,
-          other_reversals: Array.isArray(parsed.flagged_patterns?.other_reversals)
-            ? parsed.flagged_patterns.other_reversals.map(String)
-            : Array.isArray(parsed.flaggedPatterns?.other_reversals)
-              ? parsed.flaggedPatterns.other_reversals.map(String)
-              : [],
-          phonetic_substitutions: Array.isArray(parsed.flagged_patterns?.phonetic_substitutions)
-            ? parsed.flagged_patterns.phonetic_substitutions.map(String)
-            : Array.isArray(parsed.flaggedPatterns?.phonetic_substitutions)
-              ? parsed.flaggedPatterns.phonetic_substitutions.map(String)
-              : [],
-          spacing_irregular: Boolean(parsed.flagged_patterns?.spacing_irregular ?? parsed.flaggedPatterns?.spacing_irregular ?? false),
-          sizing_inconsistent: Boolean(parsed.flagged_patterns?.sizing_inconsistent ?? parsed.flaggedPatterns?.sizing_inconsistent ?? false),
-          observations: String(parsed.flagged_patterns?.observations ?? parsed.flaggedPatterns?.observations ?? ""),
-        },
+        flagged_patterns: getFlaggedPatterns(),
       };
 
       const flaggedPatterns = normalized.flagged_patterns;

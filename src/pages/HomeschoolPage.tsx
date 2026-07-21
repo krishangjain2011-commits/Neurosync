@@ -298,7 +298,7 @@ function HandwritingTool({ childId }: { childId: number }) {
                           <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
                             {s.created_at ? new Date(s.created_at).toLocaleDateString("en-IN") : "—"}
                           </span>
-                          <button onClick={() => deleteSample(s.id)}
+                          <button onClick={() => s.id !== undefined && deleteSample(s.id)}
                             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--red)", fontSize: "0.75rem" }}>
                             Delete
                           </button>
