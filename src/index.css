@@ -3,9 +3,9 @@
 @layer base {
   :root {
     /* ── Palette ── */
-    --canvas:      #F7F4FF;
-    --surface:     #FFFFFF;
-    --surface-2:   #F4EFFD;
+    --canvas:      rgba(247, 244, 255, 0.0);
+    --surface:     rgba(255, 255, 255, 0.82);
+    --surface-2:   rgba(244, 239, 253, 0.80);
     --border:      #DDD0F4;
     --border-soft: #E8E1F8;
 
@@ -56,29 +56,43 @@
 
   html {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background: linear-gradient(180deg, #F6F2FF 0%, #F8F6FF 100%);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
     font-size: 18px;
     line-height: 1.55;
   }
 
-  body { margin: 0; min-height: 100vh; background: transparent; }
-
-  #root { min-height: 100vh; display: flex; flex-direction: column; background: linear-gradient(180deg, #F6F2FF 0%, #F8F6FF 100%); position: relative; z-index: 1; }
-
-  /* Backdrop element (fixed behind app content) */
-  #backdrop {
-    position: fixed;
-    inset: 0;
-    /* Prefer local optimized WebP, then local JPG, then article image, then hosted fallback */
-    background-image: url('/backdrop.webp'), url('/backdrop.jpg'), url('https://autismresponseteam.com/wp-content/uploads/2024/05/neurodivergent-vs-neurotypical-whats-the-difference.jpg'), url('https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=1600&q=80');
+  body {
+    margin: 0;
+    min-height: 100vh;
+    /* ── Backdrop image — always visible behind everything ── */
+    background-color: #F7F4FF;
+    background-image: url('/backdrop.jpg');
     background-size: cover;
     background-position: center center;
     background-repeat: no-repeat;
-    filter: brightness(0.58) saturate(0.95);
-    z-index: 0;
+    background-attachment: fixed;
+  }
+
+  /* Overlay to ensure text readability over the image */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(247, 244, 255, 0.72);
     pointer-events: none;
+    z-index: 0;
+  }
+
+  #backdrop { display: none; } /* no longer needed — body handles it */
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    z-index: 1;
+    background: transparent;
   }
 
   ::-webkit-scrollbar { width: 4px; height: 4px; }

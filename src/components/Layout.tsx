@@ -192,12 +192,14 @@ export default function Layout() {
   );
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "var(--canvas)" }}>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "transparent" }}>
 
       {/* Desktop sidebar — independently scrollable */}
       <aside className="hidden md:block" style={{
         width: "235px", minWidth: "235px", flexShrink: 0,
-        background: "var(--surface)",
+        background: "rgba(255,255,255,0.82)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
         borderRight: "1px solid var(--border)",
         height: "100vh",
         overflowY: "auto",
@@ -237,7 +239,10 @@ export default function Layout() {
               transition={{ type: "spring", damping: 28, stiffness: 240 }}
               style={{
                 position: "fixed", left: 0, top: 0, bottom: 0, width: "240px",
-                zIndex: 50, background: "var(--surface)",
+                zIndex: 50,
+                background: "rgba(255,255,255,0.88)",
+                backdropFilter: "blur(16px)",
+                WebkitBackdropFilter: "blur(16px)",
                 borderRight: "1px solid var(--border)",
               }}
             >

@@ -132,7 +132,7 @@ export default function VisualBoardPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", padding: "1.5rem", backgroundColor: "var(--canvas)" }}>
+    <div style={{ minHeight: "100vh", padding: "1.5rem" }}>
       <div style={{ maxWidth: "1080px", margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
           <div>

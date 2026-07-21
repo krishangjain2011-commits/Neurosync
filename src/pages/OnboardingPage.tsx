@@ -141,7 +141,7 @@ export default function OnboardingPage({ addMode = false }: { addMode?: boolean 
   ];
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "var(--canvas)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "transparent", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
         style={{ width: "100%", maxWidth: "520px", backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "16px", padding: "2rem", boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
 

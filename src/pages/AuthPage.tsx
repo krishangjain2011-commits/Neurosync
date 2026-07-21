@@ -36,7 +36,7 @@ export default function AuthPage() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "var(--canvas)",
+      background: "transparent",
       display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem",
       position: "relative", overflow: "hidden",
     }}>

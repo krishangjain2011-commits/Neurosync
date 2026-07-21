@@ -87,7 +87,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", backgroundColor: "var(--canvas)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", backgroundColor: "transparent" }}>
       {/* Header */}
       <div style={{
         padding: "1rem 1.5rem",
