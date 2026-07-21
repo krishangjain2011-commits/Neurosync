@@ -1,9 +1,8 @@
 /**
  * NeuroSync API Client
  *
- * Security: the opaque session token is stored in sessionStorage so it is
- * cleared automatically when the tab/browser closes. Every fresh visit
- * starts from the login screen.
+ * Security: the opaque session token is stored in localStorage so it
+ * persists across browser restarts on the same device.
  * The raw user ID is NEVER stored or sent as a credential.
  * Cookie (httpOnly) is the primary auth vector; the Bearer header
  * is the fallback for sandboxed iframes where cookies are blocked.
@@ -13,6 +12,7 @@ const TOKEN_KEY = "neurosync_token";
 const USER_KEY  = "neurosync_user_meta"; // non-sensitive display data only
 const CHILDREN_KEY = "neurosync_children";
 const ACTIVE_CHILD_KEY = "neurosync_active_child";
+const APP_DATA_KEY = "neurosync_app_data";
 
 export interface UserMeta {
   email: string;
@@ -21,24 +21,25 @@ export interface UserMeta {
 }
 
 export function getStoredToken(): string | null {
-  return sessionStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 export function storeSession(token: string, meta: UserMeta): void {
-  sessionStorage.setItem(TOKEN_KEY, token);
-  sessionStorage.setItem(USER_KEY, JSON.stringify(meta));
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USER_KEY, JSON.stringify(meta));
 }
 
 export function clearSession(): void {
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(USER_KEY);
-  sessionStorage.removeItem(CHILDREN_KEY);
-  sessionStorage.removeItem(ACTIVE_CHILD_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(CHILDREN_KEY);
+  localStorage.removeItem(ACTIVE_CHILD_KEY);
+  clearAppData();
 }
 
 export function getStoredMeta(): UserMeta | null {
   try {
-    const raw = sessionStorage.getItem(USER_KEY);
+    const raw = localStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -46,20 +47,42 @@ export function getStoredMeta(): UserMeta | null {
 }
 
 export function storeChildren(children: any[]): void {
-  sessionStorage.setItem(CHILDREN_KEY, JSON.stringify(children));
+  localStorage.setItem(CHILDREN_KEY, JSON.stringify(children));
 }
 
 export function getStoredChildren(): any[] | null {
   try {
-    const raw = sessionStorage.getItem(CHILDREN_KEY);
+    const raw = localStorage.getItem(CHILDREN_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
+export interface StoredAppData {
+  user: UserMeta & { id: number; preferredLanguage: string; children: any[] };
+  activeChildId: number | null;
+}
+
+export function storeAppData(data: StoredAppData): void {
+  localStorage.setItem(APP_DATA_KEY, JSON.stringify(data));
+}
+
+export function getStoredAppData(): StoredAppData | null {
+  try {
+    const raw = localStorage.getItem(APP_DATA_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearAppData(): void {
+  localStorage.removeItem(APP_DATA_KEY);
+}
+
 export function getStoredActiveChildId(): number | null {
-  const raw = sessionStorage.getItem(ACTIVE_CHILD_KEY);
+  const raw = localStorage.getItem(ACTIVE_CHILD_KEY);
   if (!raw) return null;
   const id = parseInt(raw, 10);
   return Number.isNaN(id) ? null : id;
@@ -67,9 +90,9 @@ export function getStoredActiveChildId(): number | null {
 
 export function storeActiveChildId(childId: number | null): void {
   if (childId === null) {
-    sessionStorage.removeItem(ACTIVE_CHILD_KEY);
+    localStorage.removeItem(ACTIVE_CHILD_KEY);
   } else {
-    sessionStorage.setItem(ACTIVE_CHILD_KEY, String(childId));
+    localStorage.setItem(ACTIVE_CHILD_KEY, String(childId));
   }
 }
 
@@ -77,10 +100,17 @@ export function storeActiveChildId(childId: number | null): void {
 
 async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getStoredToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
-  };
+  const headers: Record<string, string> = {};
+  const body = options.body;
+
+  if (!(body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  if (options.headers) {
+    Object.assign(headers, options.headers as Record<string, string>);
+  }
+
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   return fetch(url, { ...options, headers, credentials: "include" });
@@ -96,7 +126,17 @@ export async function apiGet<T>(url: string): Promise<T> {
 }
 
 export async function apiPost<T>(url: string, body: unknown): Promise<T> {
-  const res = await apiFetch(url, { method: "POST", body: JSON.stringify(body) });
+  const isFormData = body instanceof FormData;
+  const res = await apiFetch(url, { method: "POST", body: isFormData ? body : JSON.stringify(body) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `POST ${url} failed`);
+  }
+  return res.json();
+}
+
+export async function apiPostFormData<T>(url: string, formData: FormData): Promise<T> {
+  const res = await apiFetch(url, { method: "POST", body: formData });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || `POST ${url} failed`);
@@ -109,6 +149,15 @@ export async function apiPut<T>(url: string, body: unknown): Promise<T> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || `PUT ${url} failed`);
+  }
+  return res.json();
+}
+
+export async function apiPatch<T>(url: string, body: unknown): Promise<T> {
+  const res = await apiFetch(url, { method: "PATCH", body: JSON.stringify(body) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `PATCH ${url} failed`);
   }
   return res.json();
 }

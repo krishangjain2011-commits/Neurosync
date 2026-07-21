@@ -5,6 +5,7 @@ import { readFileSync, existsSync, mkdirSync, unlinkSync } from "fs";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
 import multer from "multer";
+import nodemailer from "nodemailer";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -54,7 +55,7 @@ const ML_SIDECAR_URL = process.env.ML_SIDECAR_URL ?? "http://localhost:8000";
 // purgeStaleCueMedia() hard-deletes files after 30 days (DPDP §8).
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR ?? path.join(__dirname, "uploads");
-const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL ?? "meta-llama/llama-4-scout-17b-16e-instruct";
+const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL ?? "llama-3.2-11b-vision-preview";
 
 const audioStorage = (multer as any).diskStorage({
   destination: (req: express.Request, _file: any, cb: Function) => {
@@ -77,6 +78,19 @@ const uploadAudio = (multer as any)({
       cb(null, true);
     } else {
       cb(new Error("Only audio files are accepted"));
+    }
+  },
+});
+
+const handwritingStorage = (multer as any).memoryStorage();
+const uploadHandwriting = (multer as any)({
+  storage: handwritingStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req: express.Request, file: any, cb: Function) => {
+    if (file.mimetype?.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are accepted"));
     }
   },
 });
@@ -222,8 +236,8 @@ async function startServer() {
   const PORT = parseInt(process.env.PORT ?? "3000", 10);
 
   app.set("trust proxy", 1);
-  app.use(express.json({ limit: "2mb" }));
-  app.use(express.urlencoded({ extended: false }));
+  app.use(express.json({ limit: "20mb" }));
+  app.use(express.urlencoded({ extended: false, limit: "20mb" }));
 
   // ── HEALTH CHECK (unauthenticated — used by Render) ───────────────────────
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
@@ -1253,7 +1267,7 @@ Example: ["may be signaling hunger", "may be feeling overwhelmed by noise", ...]
     "clinical assessment.";
 
   // POST /api/children/:id/handwriting — analyze an uploaded handwriting image
-  app.post("/api/children/:id/handwriting", authenticate, async (req, res) => {
+  app.post("/api/children/:id/handwriting", authenticate, uploadHandwriting.single("image"), async (req, res) => {
     const childId = parseRouteNumber(req.params, "id");
     const { sessionUser } = req as any;
 
@@ -1261,9 +1275,12 @@ Example: ["may be signaling hunger", "may be feeling overwhelmed by noise", ...]
       .get(sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access to this child" });
 
-    const { imageData, retainImage = false } = req.body;
-    // imageData: base64 encoded image (jpeg/png)
-    if (!imageData) return res.status(400).json({ error: "imageData (base64) required" });
+    const rawBody = req.body ?? {};
+    const imageDataFromBody = typeof rawBody.imageData === "string" ? rawBody.imageData : null;
+    const retainImage = rawBody.retainImage === true || rawBody.retainImage === "true" || rawBody.retainImage === 1;
+    const imageData = imageDataFromBody ?? (req.file ? `data:${req.file.mimetype || "image/jpeg"};base64,${req.file.buffer.toString("base64")}` : null);
+
+    if (!imageData) return res.status(400).json({ error: "image file required" });
 
     const child: any = db.prepare("SELECT onboarding_data FROM children_profiles WHERE id=?").get(childId);
     const profile = child?.onboarding_data ? JSON.parse(child.onboarding_data) : {};
@@ -1290,7 +1307,11 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
     "sizing_inconsistent": false,
     "observations": "one sentence of supportive, non-diagnostic observations"
   }
-}`;
+}
+
+Do not include any extra fields, markdown, bullet points, or explanation.
+If you cannot read the handwriting, return empty strings for text fields, empty arrays for lists, and false for booleans.
+`;
 
     try {
       // Use Groq vision (meta-llama/llama-4-scout-17b-16e-instruct) — same API key, no Gemini needed.
@@ -1311,36 +1332,84 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
       const { Groq: GroqClient } = await import("groq-sdk");
       const client = new GroqClient({ apiKey: groqKey });
 
-      const completion = await client.chat.completions.create({
-        model: GROQ_VISION_MODEL,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
+      let completion;
+      const candidateModels = [GROQ_VISION_MODEL, "llama-3.2-90b-vision-preview", "meta-llama/llama-4-scout-17b-16e-instruct"];
+      let lastErr: any = null;
+      for (const modelName of candidateModels) {
+        try {
+          completion = await client.chat.completions.create({
+            model: modelName,
+            messages: [
               {
-                type: "image_url",
-                image_url: { url: `data:${mimeType};base64,${base64Clean}` },
+                role: "user",
+                content: [
+                  { type: "text", text: prompt },
+                  {
+                    type: "image_url",
+                    image_url: { url: `data:${mimeType};base64,${base64Clean}` },
+                  },
+                ] as any,
               },
-            ] as any,
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 1024,
-        response_format: { type: "json_object" },
-      });
+            ],
+            temperature: 0.0,
+            max_tokens: 1024,
+            response_format: { type: "json_object" },
+          });
+          break;
+        } catch (err: any) {
+          lastErr = err;
+          const code = err?.error?.error?.code || err?.code || err?.status;
+          if (code === "model_not_found" || code === 404) continue;
+          throw err;
+        }
+      }
 
-      const raw = completion.choices[0]?.message?.content ?? "";
+      if (!completion) {
+        console.error("[handwriting] Groq call failed:", lastErr);
+        return res.status(503).json({
+          error: "Vision model not available. Update GROQ_VISION_MODEL or use a Groq account with vision access.",
+          reason: lastErr?.error?.error?.message || lastErr?.message || "Unknown error",
+        });
+      }
+
+      let rawMessage = completion.choices[0]?.message?.content ?? "";
+      let raw = typeof rawMessage === "string" ? rawMessage : JSON.stringify(rawMessage);
       const { result: repaired } = repairJson(raw, "/api/handwriting");
 
       let parsed: any = {};
       try {
         parsed = JSON.parse(repaired);
-      } catch {
-        return res.status(422).json({ error: "Could not parse AI response", raw });
+      } catch (err) {
+        console.error("[handwriting] JSON parse failed after structured response:", err, repaired);
+        return res.status(502).json({
+          error: "Vision service returned malformed JSON despite structured format.",
+          raw: repaired,
+        });
       }
 
-      const flaggedPatterns = parsed.flagged_patterns ?? {};
+      const normalized = {
+        raw_transcription: String(parsed.raw_transcription ?? parsed.rawTranscription ?? ""),
+        interpreted_text: String(parsed.interpreted_text ?? parsed.interpretedText ?? ""),
+        flagged_patterns: {
+          b_d_reversals: Number(parsed.flagged_patterns?.b_d_reversals ?? parsed.flaggedPatterns?.b_d_reversals ?? 0) || 0,
+          p_q_reversals: Number(parsed.flagged_patterns?.p_q_reversals ?? parsed.flaggedPatterns?.p_q_reversals ?? 0) || 0,
+          other_reversals: Array.isArray(parsed.flagged_patterns?.other_reversals)
+            ? parsed.flagged_patterns.other_reversals.map(String)
+            : Array.isArray(parsed.flaggedPatterns?.other_reversals)
+              ? parsed.flaggedPatterns.other_reversals.map(String)
+              : [],
+          phonetic_substitutions: Array.isArray(parsed.flagged_patterns?.phonetic_substitutions)
+            ? parsed.flagged_patterns.phonetic_substitutions.map(String)
+            : Array.isArray(parsed.flaggedPatterns?.phonetic_substitutions)
+              ? parsed.flaggedPatterns.phonetic_substitutions.map(String)
+              : [],
+          spacing_irregular: Boolean(parsed.flagged_patterns?.spacing_irregular ?? parsed.flaggedPatterns?.spacing_irregular ?? false),
+          sizing_inconsistent: Boolean(parsed.flagged_patterns?.sizing_inconsistent ?? parsed.flaggedPatterns?.sizing_inconsistent ?? false),
+          observations: String(parsed.flagged_patterns?.observations ?? parsed.flaggedPatterns?.observations ?? ""),
+        },
+      };
+
+      const flaggedPatterns = normalized.flagged_patterns;
       const reversalCount =
         (flaggedPatterns.b_d_reversals ?? 0) +
         (flaggedPatterns.p_q_reversals ?? 0) +
@@ -1374,6 +1443,7 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
       }
 
       res.json({
+        id: sampleId,
         sampleId,
         rawTranscription: parsed.raw_transcription,
         interpretedText:  parsed.interpreted_text,
@@ -1593,10 +1663,15 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
     ).get(sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access" });
 
-    const resendKey = process.env.RESEND_API_KEY;
-    if (!resendKey) {
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpPort = parseInt(process.env.SMTP_PORT ?? "587", 10);
+    const smtpSecure = process.env.SMTP_SECURE === "true";
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+
+    if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
       return res.status(503).json({
-        error: "Email not configured. Add RESEND_API_KEY to .env (free at resend.com).",
+        error: "Email not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS in .env.",
         code: "EMAIL_NOT_CONFIGURED",
       });
     }
@@ -1671,25 +1746,76 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
 </html>`;
 
     try {
-      const { Resend } = await import("resend");
-      const resend = new Resend(resendKey);
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        auth: { user: smtpUser, pass: smtpPass },
+      });
 
-      const { data, error: emailError } = await resend.emails.send({
-        from: "NeuroSync <onboarding@resend.dev>",
-        to: [recipientEmail],
-        subject: `Child Development Report — ${child.name || "NeuroSync"}`,
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM ?? `NeuroSync <${smtpUser}>`,
+        to: recipientEmail,
+        subject: `NeuroSync report for ${child.name || "your child"}`,
         html,
       });
 
-      if (emailError) {
-        console.error("[email]", emailError);
-        return res.status(500).json({ error: (emailError as any).message || "Email sending failed" });
-      }
-
-      res.json({ status: "sent", id: data?.id });
+      res.json({ status: "sent" });
     } catch (err: any) {
-      console.error("[email]", err);
-      res.status(500).json({ error: err.message || "Email sending failed" });
+      console.error("[report-email]", err);
+      res.status(500).json({ error: err.message || "Report email failed" });
+    }
+  });
+
+  app.post("/api/admin/send-local-csv", authenticate, async (req, res) => {
+    const { csv, subject, note } = req.body;
+    if (!csv) return res.status(400).json({ error: "csv required" });
+
+    const adminEmail = process.env.ADMIN_REPORT_EMAIL;
+    const smtpHostAdmin = process.env.SMTP_HOST;
+    const smtpPortAdmin = parseInt(process.env.SMTP_PORT ?? "587", 10);
+    const smtpSecureAdmin = process.env.SMTP_SECURE === "true";
+    const smtpUserAdmin = process.env.SMTP_USER;
+    const smtpPassAdmin = process.env.SMTP_PASS;
+
+    if (!adminEmail || !smtpHostAdmin || !smtpPortAdmin || !smtpUserAdmin || !smtpPassAdmin) {
+      return res.status(503).json({
+        error: "Admin report email or SMTP configuration is not set.",
+        code: "ADMIN_REPORT_NOT_CONFIGURED",
+      });
+    }
+
+    const senderUser: any = db.prepare("SELECT display_name, email FROM users WHERE id=?").get((req as any).sessionUser.userId);
+    const senderName = senderUser?.display_name || senderUser?.email || "NeuroSync caregiver";
+    const subjectLine = subject || `NeuroSync device export from ${senderName}`;
+    const text = `Auto-sent device-local NeuroSync data from ${senderName} (${senderUser?.email}).${note ? `\n\nNote: ${note}` : ""}`;
+
+    try {
+      const transporter = nodemailer.createTransport({
+        host: smtpHostAdmin,
+        port: smtpPortAdmin,
+        secure: smtpSecureAdmin,
+        auth: { user: smtpUserAdmin, pass: smtpPassAdmin },
+      });
+
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM ?? `NeuroSync <${smtpUserAdmin}>`,
+        to: adminEmail,
+        subject: subjectLine,
+        text,
+        attachments: [
+          {
+            filename: `neurosync-export-${new Date().toISOString().slice(0, 10)}.csv`,
+            content: csv,
+            contentType: "text/csv; charset=utf-8",
+          },
+        ],
+      });
+
+      res.json({ status: "sent" });
+    } catch (err: any) {
+      console.error("[admin-csv-email]", err);
+      res.status(500).json({ error: err.message || "CSV email failed" });
     }
   });
 

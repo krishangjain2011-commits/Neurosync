@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
-import { apiPost, apiGet, apiDelete } from "../lib/api";
+import { apiPost, apiGet, apiPatch, apiDelete, apiPostFormData } from "../lib/api";
 import FeatureTour from "../components/FeatureTour";
 
 // ── YouTube video type ─────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ interface FlaggedPatterns {
   observations?: string;
 }
 interface HWSample {
-  id: number; rawTranscription?: string; interpretedText?: string;
+  id?: number; sampleId?: number; rawTranscription?: string; interpretedText?: string;
   raw_transcription?: string; interpreted_text?: string;
   flaggedPatterns?: FlaggedPatterns; flagged_patterns?: FlaggedPatterns;
   reversalCount?: number; phoneticCount?: number;
@@ -58,6 +58,7 @@ type Tab = "lesson" | "handwriting";
 function HandwritingTool({ childId }: { childId: number }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [retainImage, setRetainImage] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<HWSample | null>(null);
@@ -76,26 +77,29 @@ function HandwritingTool({ childId }: { childId: number }) {
   };
 
   const handleFile = (file: File) => {
+    setSelectedFile(file);
     const reader = new FileReader();
     reader.onload = (e) => setPreview(e.target?.result as string);
     reader.readAsDataURL(file);
   };
 
   const analyze = async () => {
-    if (!preview) return;
+    if (!selectedFile) return;
     setLoading(true); setError(""); setResult(null); setConfirmed(false); setConfirmText("");
     try {
-      const data = await apiPost<HWSample>(`/api/children/${childId}/handwriting`, {
-        imageData: preview, retainImage,
-      });
+      const formData = new FormData();
+      formData.append("image", selectedFile);
+      formData.append("retainImage", retainImage ? "true" : "false");
+      const data = await apiPostFormData<HWSample>(`/api/children/${childId}/handwriting`, formData);
       setResult(data);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   };
 
   const confirm = async () => {
-    if (!result?.id || !confirmText.trim()) return;
-    await apiPost(`/api/children/${childId}/handwriting/${result.id}`, { confirmedText: confirmText });
+    const sampleId = result?.id ?? result?.sampleId;
+    if (!sampleId || !confirmText.trim()) return;
+    await apiPatch(`/api/children/${childId}/handwriting/${sampleId}`, { confirmedText: confirmText });
     setConfirmed(true);
   };
 
@@ -154,7 +158,7 @@ function HandwritingTool({ childId }: { childId: number }) {
           <button className="btn-primary" onClick={analyze} disabled={!preview || loading}>
             {loading ? "Analysing…" : "Analyse Handwriting →"}
           </button>
-          {preview && <button className="btn-secondary" onClick={() => { setPreview(null); setResult(null); }}>Clear</button>}
+          {preview && <button className="btn-secondary" onClick={() => { setPreview(null); setSelectedFile(null); setResult(null); }}>Clear</button>}
           <button className="btn-secondary" onClick={loadHistory} style={{ marginLeft: "auto" }}>View History</button>
         </div>
       </div>
