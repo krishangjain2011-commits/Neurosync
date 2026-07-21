@@ -54,6 +54,7 @@ const ML_SIDECAR_URL = process.env.ML_SIDECAR_URL ?? "http://localhost:8000";
 // purgeStaleCueMedia() hard-deletes files after 30 days (DPDP §8).
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR ?? path.join(__dirname, "uploads");
+const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL ?? "meta-llama/llama-4-scout-17b-16e-instruct";
 
 const audioStorage = (multer as any).diskStorage({
   destination: (req: express.Request, _file: any, cb: Function) => {
@@ -1311,7 +1312,7 @@ Analyze the handwriting in this image and return ONLY valid JSON in this exact s
       const client = new GroqClient({ apiKey: groqKey });
 
       const completion = await client.chat.completions.create({
-        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        model: GROQ_VISION_MODEL,
         messages: [
           {
             role: "user",

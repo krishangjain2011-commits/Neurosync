@@ -59,6 +59,7 @@ In **Render dashboard → Environment tab**, add:
 |---|---|---|
 | `GROQ_API_KEY` | Free key from [console.groq.com](https://console.groq.com) | ✅ Yes |
 | `GROQ_MODEL` | `llama-3.3-70b-versatile` | auto-set |
+| `GROQ_VISION_MODEL` | `meta-llama/llama-4-scout-17b-16e-instruct` | optional |
 | `NODE_ENV` | `production` | auto-set |
 | `RESEND_API_KEY` | From [resend.com](https://resend.com) — for email reports | Optional |
 | `DB_PATH` | `/data/neurosync.db` (add paid Disk) or `/tmp/neurosync.db` | Optional |
