@@ -12,6 +12,7 @@
     "dev:full": "concurrently --names \"app,ml\" --prefix-colors \"cyan,yellow\" --kill-others-on-fail \"npm run dev\" \"npm run ml:start\""
   },
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
     "@google/genai": "^1.3.0",
     "@vitejs/plugin-react": "^4.4.1",
     "bcryptjs": "^2.4.3",

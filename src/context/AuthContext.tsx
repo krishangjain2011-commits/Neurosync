@@ -93,55 +93,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [handleSetActiveChild]);
 
-  const exportCsvValue = (value: unknown) => {
-    const str = value === null || value === undefined ? "" : String(value);
-    return `"${str.replace(/"/g, '""')}"`;
-  };
-
-  const buildLocalCsv = useCallback(() => {
-    const rows: Array<{ section: string; key: string; value: string }> = [];
-    if (user) {
-      rows.push({ section: "user", key: "email", value: user.email });
-      rows.push({ section: "user", key: "displayName", value: user.displayName ?? "" });
-      rows.push({ section: "user", key: "role", value: user.role });
-      rows.push({ section: "user", key: "preferredLanguage", value: user.preferredLanguage });
-    }
-    rows.push({ section: "session", key: "activeChildId", value: String(activeChild?.id ?? "") });
-    rows.push({ section: "session", key: "activeChildName", value: activeChild?.onboarding_data?.childName ?? "" });
-
-    Object.keys(localStorage)
-      .filter((key) => key.startsWith("neurosync_"))
-      .forEach((key) => rows.push({ section: "localStorage", key, value: localStorage.getItem(key) ?? "" }));
-
-    const header = ["section", "key", "value"].map(exportCsvValue).join(",");
-    const body = rows.map((row) => [exportCsvValue(row.section), exportCsvValue(row.key), exportCsvValue(row.value)].join(",")).join("\n");
-    return `${header}\n${body}`;
-  }, [user, activeChild]);
-
-  const sendLocalCsvToAdmin = useCallback(async () => {
-    if (!user) return;
-    const today = new Date().toISOString().slice(0, 10);
-    if (localStorage.getItem("neurosync_csv_sent_date") === today) return;
-
-    const csv = buildLocalCsv();
-    try {
-      await apiPost("/api/admin/send-local-csv", {
-        csv,
-        subject: `NeuroSync auto-export for ${user.email}`,
-        note: "Automatic device-local CSV export for developer review.",
-      });
-      localStorage.setItem("neurosync_csv_sent_date", today);
-    } catch (err) {
-      console.warn("Auto CSV send failed", err);
-    }
-  }, [buildLocalCsv, user]);
-
-  useEffect(() => {
-    if (user) {
-      sendLocalCsvToAdmin();
-    }
-  }, [user, sendLocalCsvToAdmin]);
-
   useEffect(() => {
     const token = getStoredToken();
     const cachedData = getStoredAppData();
