@@ -8,8 +8,10 @@
     "start": "node --import tsx/esm server.ts",
     "start:prod": "NODE_ENV=production node --import tsx/esm server.ts",
     "ml:start": "ml\\.venv\\Scripts\\uvicorn.exe main:app --app-dir ml --host 0.0.0.0 --port 8000",
+    "handwriting:start": "cd handwriting-service && ..\\ml\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8001",
     "ml:setup": "python -m venv ml\\.venv && ml\\.venv\\Scripts\\pip.exe install -r ml\\requirements.txt",
-    "dev:full": "concurrently --names \"app,ml\" --prefix-colors \"cyan,yellow\" --kill-others-on-fail \"npm run dev\" \"npm run ml:start\""
+    "dev:full": "concurrently --names \"app,ml\" --prefix-colors \"cyan,yellow\" --kill-others-on-fail \"npm run dev\" \"npm run ml:start\"",
+    "dev:full-handwriting": "concurrently --names \"app,ml,hw\" --prefix-colors \"cyan,yellow,magenta\" --kill-others-on-fail \"npm run dev\" \"npm run ml:start\" \"npm run handwriting:start\""
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

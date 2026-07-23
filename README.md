@@ -36,8 +36,11 @@ Falls back to a JS approximation automatically if not running.
 # First-time setup
 npm run ml:setup
 
-# Start everything together
+# Start everything together (Node + ML sidecar)
 npm run dev:full
+
+# Start everything together including handwriting service
+npm run dev:full-handwriting
 ```
 
 ---
@@ -60,6 +63,7 @@ In **Render dashboard → Environment tab**, add:
 | `GROQ_API_KEY` | Free key from [console.groq.com](https://console.groq.com) | ✅ Yes |
 | `GROQ_MODEL` | `llama-3.3-70b-versatile` | auto-set |
 | `GROQ_VISION_MODEL` | `meta-llama/llama-4-scout-17b-16e-instruct` | optional |
+| `MISTRAL_API_KEY` | **not required on Render free tier** | optional |
 | `SMTP_HOST` | SMTP relay hostname | Optional |
 | `SMTP_PORT` | SMTP relay port | Optional |
 | `SMTP_SECURE` | `true` or `false` | Optional |
@@ -104,7 +108,7 @@ Click **Create Web Service**. Build takes ~2 min.
 | 2 | 🎙️ Behaviour Interpreter | Audio cue recording → MFCC embedding → on-device matching |
 | 3 | 🥗 Diet Planner | Sensory-aware AI meal plans |
 | 4 | 📅 Daily Routine | Timed therapy schedules |
-| 5 | 📚 Homeschooling Helper | Lesson planner + handwriting analysis (Groq vision) |
+| 5 | 📚 Homeschooling Helper | Lesson planner + handwriting analysis (Mistral vision) |
 | 6 | 🖼️ Visual Board | PECS communication cards with text-to-speech |
 | 7 | 📈 Progress Tracker | Behavioral metrics + trend charts |
 | 8 | 📋 Reports & Sharing | Printable PDF reports, email to institutions |

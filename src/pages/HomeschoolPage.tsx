@@ -103,7 +103,8 @@ function HandwritingTool({ childId }: { childId: number }) {
     setConfirmed(true);
   };
 
-  const deleteSample = async (id: number) => {
+  const deleteSample = async (id: number | undefined) => {
+    if (id == null) return;
     await apiDelete(`/api/children/${childId}/handwriting/${id}`);
     setHistory(h => h.filter(s => s.id !== id));
   };
@@ -298,8 +299,8 @@ function HandwritingTool({ childId }: { childId: number }) {
                           <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
                             {s.created_at ? new Date(s.created_at).toLocaleDateString("en-IN") : "—"}
                           </span>
-                          <button onClick={() => s.id !== undefined && deleteSample(s.id)}
-                            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--red)", fontSize: "0.75rem" }}>
+                          <button onClick={() => s.id != null && deleteSample(s.id)}
+                            style={{ background: "none", border: "none", cursor: s.id != null ? "pointer" : "default", color: "var(--red)", fontSize: "0.75rem" }}>
                             Delete
                           </button>
                         </div>
@@ -448,7 +449,7 @@ Return as JSON:
           "Handwriting Interpreter: upload or photograph your child's written work to get a literal + corrected reading side by side.",
           "Patterns like b/d reversals and phonetic spellings are shown as simple tags — never as scores or severity ratings.",
           "Pattern counts are automatically added to the Progress Tracker so you can see trends over weeks.",
-          "Handwriting Interpreter uses Groq AI vision (llama-4-scout) — works with your existing Groq API key.",
+          "Handwriting Interpreter uses Mistral AI vision — works with your existing MISTRAL_API_KEY.",
         ]}
         accentColor="var(--blue)"
       />

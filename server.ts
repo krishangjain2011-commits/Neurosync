@@ -21,16 +21,9 @@ if (existsSync(envFile)) {
     if (idx === -1) continue;
     const key = trimmed.slice(0, idx).trim();
     const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, "");
-    if (key && !process.env[key]) {
-      process.env[key] = val;
-      if (key === "GEMINI_API_KEY") {
-        console.log(`[env-debug] GEMINI_API_KEY parsed: "${val.substring(0, 20)}..."`);
-      }
-    }
+    if (key && !process.env[key]) process.env[key] = val;
   }
   console.log("[env] Loaded .env from", envFile);
-  console.log("[env] GEMINI_API_KEY:", process.env.GEMINI_API_KEY ? `✓ SET (${process.env.GEMINI_API_KEY.substring(0, 20)}...)` : "✗ NOT SET");
-  console.log("[env] GROQ_API_KEY:", process.env.GROQ_API_KEY ? "✓ SET" : "✗ NOT SET");
 }
 
 import db from "./db/index.js";
@@ -198,118 +191,25 @@ setInterval(purgeStaleCueMedia, 1000 * 60 * 60 * 24); // daily
 
 // MODEL and getGenAI() are handled inside lib/ai-client.ts
 
-// Parse handwriting analysis from markdown if JSON fails
-function parseHandwritingFromMarkdown(text: string): any {
-  // Split into lines and categorize by type
-  const lines: string[] = [];
-  const textLines = text.split('\n');
-  
-  let inAnalysisSection = false;
-  let inTranscriptionSection = false;
-  
-  for (const line of textLines) {
-    const trimmed = line.trim();
-    
-    // Skip empty lines, headers, section markers
-    if (!trimmed || trimmed.startsWith('#') || trimmed.match(/^[*_-]{3,}$/) || trimmed.startsWith('**')) {
-      continue;
-    }
-    
-    // Detect section markers (these indicate analysis, not transcription)
-    if (trimmed.match(/^(analysis|pattern|observation|note|comment|metadata):/i)) {
-      inAnalysisSection = true;
-      inTranscriptionSection = false;
-      continue;
-    }
-    
-    // Detect if this looks like actual handwritten content section
-    if (trimmed.match(/^(transcription|written|handwritten|text|reading|what was written|actual content)/i)) {
-      inTranscriptionSection = true;
-      inAnalysisSection = false;
-      continue;
-    }
-    
-    // Skip lines that are clearly analysis/explanation
-    if (trimmed.match(/^(the|this|this image|the handwriting|the child|the student|appears|shows|looks|seems|appears to be|likely|probably|may|might)/i)
-        || trimmed.match(/caregiver|diagnostic|analysis|observe|characterize|exhibit/i)) {
-      continue;
-    }
-    
-    // Extract actual content from list items
-    let content = trimmed
-      .replace(/^[-•*+]\s+/, '')  // Remove list markers
-      .replace(/^\d+[\d.)\s:-]*/, '')  // Remove numbered list markers
-      .replace(/^(?:line|word|text|item|note)[\s\d.:-]*/i, '')  // Remove line/word labels
-      .replace(/^["']([^"']+)["'].*/, '$1')  // Extract quoted text
-      .replace(/^-\s+/, '')  // Remove dashes
-      .trim();
-    
-    // Quality checks for actual handwritten content
-    const hasLetters = /[a-zA-Z]/.test(content);
-    const hasWords = /\w{2,}/.test(content);
-    const isNotMetadata = !content.match(/^[*_\-`#]/) && !content.includes('**');
-    const isReasonableLength = content.length > 0 && content.length < 500;
-    const notAnalysisContent = !content.match(/reversal|phonetic|spacing|sizing|pattern|observed|appears|shows/i);
-    
-    if (hasLetters && hasWords && isNotMetadata && isReasonableLength && notAnalysisContent) {
-      lines.push(content);
-      console.log(`[handwriting-parser] Found content: "${content.substring(0, 60)}"`);
-    }
-  }
-  
-  console.log(`[handwriting-parser] Extracted ${lines.length} content lines from markdown`);
-  
-  // If we found content lines, use them; otherwise fall back to generic message
-  const rawTranscription = lines.length > 0 
-    ? lines.slice(0, 8).join(' ').substring(0, 500)
-    : "No transcription extracted";
-    
-  const interpretedText = lines.length > 0
-    ? lines.slice(0, 5).join(' ').substring(0, 500)
-    : "Unable to interpret";
-
-  console.log(`[handwriting-parser] Final extraction - Raw: "${rawTranscription.substring(0, 100)}"`);
-
-  return {
-    raw_transcription: rawTranscription,
-    interpreted_text: interpretedText,
-    b_d_reversals: text.match(/\b[bd].*?[bd]|reversal|swap|confusion/i) ? 1 : 0,
-    p_q_reversals: text.match(/\b[pq].*?[pq]/i) ? 1 : 0,
-    other_reversals: [],
-    phonetic_substitutions: [],
-    spacing_irregular: text.match(/spacing|irregular|space|scatter|inconsistent spacing/i) ? true : false,
-    sizing_inconsistent: text.match(/sizing|inconsistent|size|vary|varied size/i) ? true : false,
-    observations: lines.length > 0 ? `${lines.length} lines extracted` : "Unable to extract text"
-  };
-}
-
 // Self-healing JSON repair with telemetry
 function repairJson(raw: string, endpoint: string): { result: string; repaired: boolean } {
-  let s = raw.trim();
-  
-  // Remove markdown code blocks if present
-  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  
+  let s = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
   const original = s;
   const opens: string[] = [];
   const pairs: Record<string, string> = { "{": "}", "[": "]" };
   const closes = new Set(["}", "]"]);
-  
   for (const ch of s) {
     if (pairs[ch]) opens.push(pairs[ch]);
     else if (closes.has(ch) && opens[opens.length - 1] === ch) opens.pop();
   }
-  
-  // Fix common JSON issues
   const quoteCount = (s.match(/(?<!\\)"/g) || []).length;
   if (quoteCount % 2 !== 0) s += '"';
   s = s.replace(/,\s*([\]}])/g, "$1");
   while (opens.length) s += opens.pop();
-  
   const repaired = s !== original;
   if (repaired) {
     db.prepare("INSERT INTO ai_repair_log (endpoint, repaired) VALUES (?,1)").run(endpoint);
-    console.warn(`[JSON] Repair on ${endpoint}`);
+    console.warn(`[AI] JSON repair triggered on ${endpoint}`);
   }
   return { result: s, repaired };
 }
@@ -1375,8 +1275,6 @@ Example: ["may be signaling hunger", "may be feeling overwhelmed by noise", ...]
       .get(sessionUser.userId, childId);
     if (!access) return res.status(403).json({ error: "No access to this child" });
 
-    assertConsent(childId);
-
     const rawBody = req.body ?? {};
     const imageDataFromBody = typeof rawBody.imageData === "string" ? rawBody.imageData : null;
     const retainImage = rawBody.retainImage === true || rawBody.retainImage === "true" || rawBody.retainImage === 1;
@@ -1384,52 +1282,132 @@ Example: ["may be signaling hunger", "may be feeling overwhelmed by noise", ...]
 
     if (!imageData) return res.status(400).json({ error: "image file required" });
 
+    const child: any = db.prepare("SELECT onboarding_data FROM children_profiles WHERE id=?").get(childId);
+    const profile = child?.onboarding_data ? JSON.parse(child.onboarding_data) : {};
+
+    const prompt =
+      `${HW_SYSTEM_PROMPT}
+
+Child context:
+- Name: ${profile.childName ?? "the child"}
+- Age: ${profile.childAge ?? "unknown"}
+- Diagnoses: ${profile.diagnoses?.join(", ") || "Not specified"}
+${profile.otherDetails ? `- Additional notes: ${profile.otherDetails}` : ""}
+
+Analyze the handwriting in this image and return ONLY valid JSON in this exact structure:
+{
+  "raw_transcription": "exact literal reading of what is written, character by character",
+  "interpreted_text": "your best guess at what the child intended to write, with corrections",
+  "flagged_patterns": {
+    "b_d_reversals": 0,
+    "p_q_reversals": 0,
+    "other_reversals": [],
+    "phonetic_substitutions": [],
+    "spacing_irregular": false,
+    "sizing_inconsistent": false,
+    "observations": "one sentence of supportive, non-diagnostic observations"
+  }
+}
+
+Do not include any extra fields, markdown, bullet points, or explanation.
+If you cannot read the handwriting, return empty strings for text fields, empty arrays for lists, and false for booleans.
+`;
+
     try {
-      const HANDWRITING_SERVICE_URL = process.env.HANDWRITING_SERVICE_URL || "http://127.0.0.1:8011";
-      if (!process.env.HANDWRITING_SERVICE_URL) {
-        console.warn("[handwriting] HANDWRITING_SERVICE_URL not set, using default http://127.0.0.1:8011");
-      }
-      console.log(`[handwriting] Calling Python service at ${HANDWRITING_SERVICE_URL}`);
-
-      // Convert base64 data to buffer
-      const mimeMatch = imageData.match(/^data:(image\/[a-z]+);base64,/);
-      const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-      const base64Clean = imageData.replace(/^data:image\/[a-z]+;base64,/, "");
-      const imageBuffer = Buffer.from(base64Clean, "base64");
-
-      // Create a multipart upload body that Node's fetch can send reliably.
-      const formData = new FormData();
-      const fileBlob = new Blob([imageBuffer], { type: mimeType });
-      formData.append("file", fileBlob, `handwriting_${childId}_${Date.now()}.jpg`);
-
-      // Call Python microservice
-      const response = await fetch(`${HANDWRITING_SERVICE_URL}/api/v1/analyze`, {
-        method: "POST",
-        body: formData,
-        signal: AbortSignal.timeout(30000),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-        console.error("[handwriting] Service error:", errorData);
-        const detailMessage = errorData.detail || errorData.message || "Unknown error from analyzer";
-        const isRateLimited = /rate-limited|rate limit|429/i.test(detailMessage);
-        return res.status(response.status).json({
-          error: isRateLimited ? "handwriting analysis is temporarily rate-limited, please wait a moment and try again" : "Handwriting analysis failed",
-          reason: detailMessage,
-          code: isRateLimited ? "RATE_LIMITED" : "SERVICE_ERROR",
+      const mistralKey = process.env.MISTRAL_API_KEY;
+      if (!mistralKey) {
+        return res.status(503).json({
+          error: "Handwriting analysis requires a Mistral API key (MISTRAL_API_KEY in .env).",
+          code: "MISTRAL_KEY_MISSING",
         });
       }
 
-      const serviceResult = await response.json();
-      console.log(`[handwriting] Service success: literal="${serviceResult.literal_transcription.substring(0, 40)}..."`);
+      // Detect mime type from data-URL prefix or default to jpeg
+      const mimeMatch = imageData.match(/^data:(image\/[a-z]+);base64,/);
+      const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+      const base64Clean = imageData.replace(/^data:image\/[a-z]+;base64,/, "");
+      const imageUrl = `data:${mimeType};base64,${base64Clean}`;
+      const modelName = process.env.MISTRAL_MODEL ?? "mistral-small-latest";
 
-      // Map Python service response to database schema
-      const rawTranscription = serviceResult.literal_transcription;
-      const interpretedText = serviceResult.ai_interpretation.intended_text;
-      const patternAnalysis = serviceResult.ai_interpretation.pattern_analysis;
+      const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${mistralKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: imageUrl } },
+              ],
+            },
+          ],
+          temperature: 0.0,
+          max_tokens: 1024,
+          response_format: { type: "json_object" },
+        }),
+      });
 
-      // Save to database
+      if (!response.ok) {
+        const errorBody = await response.text();
+        console.error("[handwriting] Mistral call failed:", response.status, errorBody);
+        return res.status(503).json({
+          error: "Mistral handwriting analysis failed.",
+          status: response.status,
+          details: errorBody,
+        });
+      }
+
+      const completion = await response.json();
+      let rawMessage = completion.choices?.[0]?.message?.content ?? "";
+      let raw = typeof rawMessage === "string" ? rawMessage : JSON.stringify(rawMessage);
+      const { result: repaired } = repairJson(raw, "/api/handwriting");
+
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(repaired);
+      } catch (err) {
+        console.error("[handwriting] JSON parse failed after structured response:", err, repaired);
+        return res.status(502).json({
+          error: "Vision service returned malformed JSON despite structured format.",
+          raw: repaired,
+        });
+      }
+
+      const normalized = {
+        raw_transcription: String(parsed.raw_transcription ?? parsed.rawTranscription ?? ""),
+        interpreted_text: String(parsed.interpreted_text ?? parsed.interpretedText ?? ""),
+        flagged_patterns: {
+          b_d_reversals: Number(parsed.flagged_patterns?.b_d_reversals ?? parsed.flaggedPatterns?.b_d_reversals ?? 0) || 0,
+          p_q_reversals: Number(parsed.flagged_patterns?.p_q_reversals ?? parsed.flaggedPatterns?.p_q_reversals ?? 0) || 0,
+          other_reversals: Array.isArray(parsed.flagged_patterns?.other_reversals)
+            ? parsed.flagged_patterns.other_reversals.map(String)
+            : Array.isArray(parsed.flaggedPatterns?.other_reversals)
+              ? parsed.flaggedPatterns.other_reversals.map(String)
+              : [],
+          phonetic_substitutions: Array.isArray(parsed.flagged_patterns?.phonetic_substitutions)
+            ? parsed.flagged_patterns.phonetic_substitutions.map(String)
+            : Array.isArray(parsed.flaggedPatterns?.phonetic_substitutions)
+              ? parsed.flaggedPatterns.phonetic_substitutions.map(String)
+              : [],
+          spacing_irregular: Boolean(parsed.flagged_patterns?.spacing_irregular ?? parsed.flaggedPatterns?.spacing_irregular ?? false),
+          sizing_inconsistent: Boolean(parsed.flagged_patterns?.sizing_inconsistent ?? parsed.flaggedPatterns?.sizing_inconsistent ?? false),
+          observations: String(parsed.flagged_patterns?.observations ?? parsed.flaggedPatterns?.observations ?? ""),
+        },
+      };
+
+      const flaggedPatterns = normalized.flagged_patterns;
+      const reversalCount =
+        (flaggedPatterns.b_d_reversals ?? 0) +
+        (flaggedPatterns.p_q_reversals ?? 0) +
+        (flaggedPatterns.other_reversals?.length ?? 0);
+      const phoneticCount = flaggedPatterns.phonetic_substitutions?.length ?? 0;
+
+      // Save sample (image_ref only if caregiver opted in)
       const info = db.prepare(`
         INSERT INTO handwriting_samples
           (child_id, image_ref, retain_image, raw_transcription, interpreted_text, flagged_patterns, created_by_user_id)
@@ -1438,25 +1416,35 @@ Example: ["may be signaling hunger", "may be feeling overwhelmed by noise", ...]
         childId,
         retainImage ? `hw_${childId}_${Date.now()}` : null,
         retainImage ? 1 : 0,
-        rawTranscription,
-        interpretedText,
-        JSON.stringify({ pattern_analysis: patternAnalysis }),
+        parsed.raw_transcription ?? "",
+        parsed.interpreted_text ?? "",
+        JSON.stringify(flaggedPatterns),
         sessionUser.userId,
       );
       const sampleId = info.lastInsertRowid as number;
 
-      console.log(`[handwriting] Saved sample ${sampleId} for child ${childId}`);
+      // Write pattern counts into progress table so they appear on Progress Tracker
+      if (reversalCount > 0) {
+        db.prepare("INSERT INTO progress (child_id, metric_type, value, recorded_by_user_id) VALUES (?,?,?,?)")
+          .run(childId, "handwriting_reversal_count", reversalCount, sessionUser.userId);
+      }
+      if (phoneticCount > 0) {
+        db.prepare("INSERT INTO progress (child_id, metric_type, value, recorded_by_user_id) VALUES (?,?,?,?)")
+          .run(childId, "handwriting_phonetic_count", phoneticCount, sessionUser.userId);
+      }
 
       res.json({
         id: sampleId,
         sampleId,
-        rawTranscription,
-        interpretedText,
-        patternAnalysis,
+        rawTranscription: parsed.raw_transcription,
+        interpretedText:  parsed.interpreted_text,
+        flaggedPatterns,
+        reversalCount,
+        phoneticCount,
       });
     } catch (err: any) {
-      console.error("[handwriting] Error:", err.message);
-      res.status(500).json({ error: "Handwriting analysis failed", reason: err.message });
+      console.error("[handwriting]", err);
+      res.status(500).json({ error: err.message || "Handwriting analysis failed" });
     }
   });
 
@@ -1767,6 +1755,58 @@ Example: ["may be signaling hunger", "may be feeling overwhelmed by noise", ...]
     } catch (err: any) {
       console.error("[report-email]", err);
       res.status(500).json({ error: err.message || "Report email failed" });
+    }
+  });
+
+  app.post("/api/admin/send-local-csv", authenticate, async (req, res) => {
+    const { csv, subject, note } = req.body;
+    if (!csv) return res.status(400).json({ error: "csv required" });
+
+    const adminEmail = process.env.ADMIN_REPORT_EMAIL;
+    const smtpHostAdmin = process.env.SMTP_HOST;
+    const smtpPortAdmin = parseInt(process.env.SMTP_PORT ?? "587", 10);
+    const smtpSecureAdmin = process.env.SMTP_SECURE === "true";
+    const smtpUserAdmin = process.env.SMTP_USER;
+    const smtpPassAdmin = process.env.SMTP_PASS;
+
+    if (!adminEmail || !smtpHostAdmin || !smtpPortAdmin || !smtpUserAdmin || !smtpPassAdmin) {
+      return res.status(503).json({
+        error: "Admin report email or SMTP configuration is not set.",
+        code: "ADMIN_REPORT_NOT_CONFIGURED",
+      });
+    }
+
+    const senderUser: any = db.prepare("SELECT display_name, email FROM users WHERE id=?").get((req as any).sessionUser.userId);
+    const senderName = senderUser?.display_name || senderUser?.email || "NeuroSync caregiver";
+    const subjectLine = subject || `NeuroSync device export from ${senderName}`;
+    const text = `Auto-sent device-local NeuroSync data from ${senderName} (${senderUser?.email}).${note ? `\n\nNote: ${note}` : ""}`;
+
+    try {
+      const transporter = nodemailer.createTransport({
+        host: smtpHostAdmin,
+        port: smtpPortAdmin,
+        secure: smtpSecureAdmin,
+        auth: { user: smtpUserAdmin, pass: smtpPassAdmin },
+      });
+
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM ?? `NeuroSync <${smtpUserAdmin}>`,
+        to: adminEmail,
+        subject: subjectLine,
+        text,
+        attachments: [
+          {
+            filename: `neurosync-export-${new Date().toISOString().slice(0, 10)}.csv`,
+            content: csv,
+            contentType: "text/csv; charset=utf-8",
+          },
+        ],
+      });
+
+      res.json({ status: "sent" });
+    } catch (err: any) {
+      console.error("[admin-csv-email]", err);
+      res.status(500).json({ error: err.message || "CSV email failed" });
     }
   });
 

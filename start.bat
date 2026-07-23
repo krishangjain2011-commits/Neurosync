@@ -1,8 +1,9 @@
 @echo off
 :: NeuroSync — One-click startup script (Windows)
-:: Starts the Python ML sidecar and the Node.js app together.
-:: Usage: double-click start.bat  OR  run from terminal
+:: Starts the Python ML sidecar, handwriting analyzer, and the Node.js app together.
+:: Usage: double-click start.bat OR run from terminal
 
+cd /d "%~dp0"
 title NeuroSync
 
 :: ── Add WinGet ffmpeg to PATH if installed ────────────────────────────────
@@ -44,20 +45,26 @@ if not exist "ml\.venv\Scripts\uvicorn.exe" (
 
 :: ── Start ML sidecar in a new window ─────────────────────────────────────
 echo [START] Launching Python ML sidecar on port 8000...
-start "NeuroSync ML Sidecar" /min cmd /c "ml\.venv\Scripts\uvicorn.exe main:app --app-dir ml --host 0.0.0.0 --port 8000 2>&1"
+start "NeuroSync ML Sidecar" /min cmd /c "cd /d ""%~dp0"" && ml\.venv\Scripts\uvicorn.exe main:app --app-dir ml --host 0.0.0.0 --port 8000 2>&1"
 
-:: Wait a moment for sidecar to boot
-timeout /t 2 /nobreak >nul
+:: ── Start handwriting analyzer service in a new window ───────────────────
+echo [START] Launching handwriting interpreter on port 8001...
+start "NeuroSync Handwriting Service" /min cmd /c "cd /d ""%~dp0handwriting-service"" && ..\ml\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8001"
+
+:: Wait a moment for sidecars to boot
+timeout /t 3 /nobreak >nul
 
 :: ── Start Node server ─────────────────────────────────────────────────────
 echo [START] Launching NeuroSync app on http://localhost:3000
 echo.
 echo  App:    http://localhost:3000
 echo  ML API: http://localhost:8000/health
+echo  Handwriting: http://localhost:8001/api/v1/health
 echo.
 echo Press Ctrl+C to stop the app.
 echo.
 call npx tsx server.ts
 
-:: If tsx exits, kill the sidecar window too
+:: If tsx exits, kill the sidecar windows too
 taskkill /fi "WindowTitle eq NeuroSync ML Sidecar*" /f >nul 2>&1
+taskkill /fi "WindowTitle eq NeuroSync Handwriting Service*" /f >nul 2>&1
