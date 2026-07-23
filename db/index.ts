@@ -15,12 +15,31 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DB_PATH = process.env.DB_PATH ?? path.join(__dirname, "..", "neurosync.db");
-const DB_DIR = path.dirname(DB_PATH);
-if (!existsSync(DB_DIR)) {
-  mkdirSync(DB_DIR, { recursive: true });
+const FALLBACK_DB_PATH = path.join("/tmp", "neurosync.db");
+
+function ensureDirectory(pathToCheck: string): void {
+  const dir = path.dirname(pathToCheck);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
 }
 
-export const db = new Database(DB_PATH);
+function resolveDatabasePath(requestedPath: string, fallbackPath: string): string {
+  try {
+    ensureDirectory(requestedPath);
+    return requestedPath;
+  } catch (err: any) {
+    console.warn(
+      `[env] Cannot create database directory for ${requestedPath}: ${err.message}. Falling back to ${fallbackPath}`
+    );
+    ensureDirectory(fallbackPath);
+    return fallbackPath;
+  }
+}
+
+const RESOLVED_DB_PATH = resolveDatabasePath(DB_PATH, FALLBACK_DB_PATH);
+
+export const db = new Database(RESOLVED_DB_PATH);
 
 // Performance & integrity
 db.pragma("journal_mode = WAL");
