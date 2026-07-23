@@ -6,7 +6,7 @@ services:
     plan: free
 
     # Build: install deps + compile React frontend
-    buildCommand: npm install && npm run build
+    buildCommand: NPM_CONFIG_PRODUCTION=false npm install && npm run build
 
     # Start: run Express server (serves built frontend + API)
     startCommand: NODE_ENV=production node --import tsx/esm server.ts
