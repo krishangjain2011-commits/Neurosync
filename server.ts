@@ -14,8 +14,7 @@ const __dirname  = path.dirname(__filename);
 import db from "./db/index.js";
 import {
   createToken, revokeToken, authenticate, requireRole,
-  purgeExpiredTokens, isFirebaseAuthEnabled,
-  verifyFirebaseToken, getOrCreateLocalUserForFirebase,
+  purgeExpiredTokens,
 } from "./lib/auth.js";
 import { assertConsent, revokeConsent, eraseChildData } from "./lib/consent.js";
 import { translateToEnglish, translateFromEnglish } from "./lib/language-bridge.js";
@@ -281,35 +280,8 @@ async function startServer() {
     res.json({ token, email: user.email, role: user.role, displayName: user.display_name });
   });
 
-  app.post("/api/auth/firebase", authLimiter, async (req, res) => {
-    if (!isFirebaseAuthEnabled()) {
-      return res.status(400).json({ error: "Firebase authentication is not configured" });
-    }
-
-    const { idToken, role, displayName, preferredLanguage, orgId } = req.body;
-    if (!idToken) {
-      return res.status(400).json({ error: "idToken required" });
-    }
-
-    const payload = await verifyFirebaseToken(idToken);
-    if (!payload) {
-      return res.status(401).json({ error: "Invalid Firebase ID token" });
-    }
-
-    const localUser = getOrCreateLocalUserForFirebase(payload, {
-      preferredLanguage,
-      role,
-      displayName,
-      orgId,
-    });
-    if (!localUser) {
-      return res.status(500).json({ error: "Failed to create or map Firebase user" });
-    }
-
-    const token = createToken(localUser.userId);
-    setTokenCookie(res, token);
-    res.json({ token, email: localUser.email, role: localUser.role, displayName: localUser.displayName });
-  });
+  // Firebase authentication has been removed.
+  // Use local email/password login and registration instead.
 
   app.post("/api/logout", authenticate, (req, res) => {
     revokeToken((req as any).sessionToken);

@@ -71,10 +71,6 @@ In **Render dashboard → Environment tab**, add:
 | `SMTP_PASS` | SMTP password | Optional |
 | `SMTP_FROM` | Optional sender address override | Optional |
 | `ADMIN_REPORT_EMAIL` | Your email for receiving automatic CSV exports | optional |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | JSON content for Firebase Admin service account | Optional |
-| `FIREBASE_CLIENT_EMAIL` | Firebase service account client email | Optional |
-| `FIREBASE_PRIVATE_KEY` | Firebase service account private key | Optional |
-| `FIREBASE_PROJECT_ID` | Firebase project ID | Optional |
 | `NODE_ENV` | `production` | auto-set |
 | `DB_PATH` | `/data/neurosync.db` (add paid Disk) or `/tmp/neurosync.db` | Optional |
 | `UPLOADS_DIR` | `/data/uploads` (paid Disk) or `/tmp/uploads` | Optional |
