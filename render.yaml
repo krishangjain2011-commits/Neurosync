@@ -27,6 +27,26 @@ services:
       - key: GROQ_MODEL
         value: llama-3.3-70b-versatile
 
+      # ── Firebase ─────────────────────────────────────────────────────────
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_API_KEY
+        sync: false
+      - key: FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: FIREBASE_APP_ID
+        sync: false
+      - key: FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: FIREBASE_MEASUREMENT_ID
+        sync: false
+
       # ── Database ─────────────────────────────────────────────────────────
       # Free tier: ephemeral — data resets on redeploy.
       # Paid tier: add a Disk at /data and set DB_PATH=/data/neurosync.db

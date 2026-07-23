@@ -39,7 +39,19 @@ function resolveDatabasePath(requestedPath: string, fallbackPath: string): strin
 
 const RESOLVED_DB_PATH = resolveDatabasePath(DB_PATH, FALLBACK_DB_PATH);
 
-export const db = new Database(RESOLVED_DB_PATH);
+let dbInstance: Database.Database;
+try {
+  dbInstance = new Database(RESOLVED_DB_PATH);
+} catch (err: any) {
+  const fallbackPath = FALLBACK_DB_PATH;
+  console.warn(
+    `[env] Cannot open database at ${RESOLVED_DB_PATH}: ${err.message}. Falling back to ${fallbackPath}`
+  );
+  ensureDirectory(fallbackPath);
+  dbInstance = new Database(fallbackPath);
+}
+
+export const db = dbInstance;
 
 // Performance & integrity
 db.pragma("journal_mode = WAL");

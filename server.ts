@@ -2096,9 +2096,18 @@ If you cannot read the handwriting, return empty strings for text fields, empty 
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, "dist")));
+    const distDir = path.join(__dirname, "dist");
+    const altDistDir = path.join(__dirname, "..", "dist");
+    const clientDist = existsSync(distDir) ? distDir : altDistDir;
+
+    if (!existsSync(clientDist)) {
+      console.error("[build] Could not find dist directory at", distDir, "or", altDistDir);
+      throw new Error("Client dist folder not found; ensure the frontend build completed successfully");
+    }
+
+    app.use(express.static(clientDist));
     app.get("*", (_req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
+      res.sendFile(path.join(clientDist, "index.html"));
     });
   }
 
