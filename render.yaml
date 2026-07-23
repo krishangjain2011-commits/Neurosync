@@ -5,8 +5,8 @@ services:
     region: singapore   # closest to India
     plan: free
 
-    # Build: install deps + compile React frontend
-    buildCommand: NPM_CONFIG_PRODUCTION=false npm install && npm run build
+    # Build: install all dependencies and compile React frontend
+    buildCommand: npm ci --include=dev && npm run build
 
     # Start: run Express server (serves built frontend + API)
     startCommand: NODE_ENV=production node --import tsx/esm server.ts
