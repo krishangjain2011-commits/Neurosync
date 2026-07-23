@@ -12,6 +12,10 @@ export default defineConfig({
   server: {
     host: true,
     allowedHosts: ['.onrender.com'],
+    hmr: process.env.DISABLE_HMR !== 'true',
+    // Note: API proxy is disabled in dev mode because the Express server
+    // handles both API and frontend in middleware mode on the same port.
+    // Vite's dev server doesn't need to proxy /api requests.
   },
   build: {
     outDir: 'dist',
@@ -29,11 +33,5 @@ export default defineConfig({
         },
       },
     },
-  },
-  server: {
-    hmr: process.env.DISABLE_HMR !== 'true',
-    // Note: API proxy is disabled in dev mode because the Express server
-    // handles both API and frontend in middleware mode on the same port.
-    // Vite's dev server doesn't need to proxy /api requests.
   },
 });
