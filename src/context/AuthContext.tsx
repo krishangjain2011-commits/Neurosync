@@ -8,6 +8,10 @@ import {
   getStoredActiveChildId, storeChildren, storeActiveChildId,
   storeAppData, getStoredAppData,
 } from "../lib/api";
+import {
+  firebaseLogin, firebaseRegister, firebaseLogout,
+  isFirebaseConfigured,
+} from "../lib/firebase";
 
 export interface OnboardingData {
   childName: string;
@@ -135,23 +139,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser, handleSetActiveChild]);
 
   const login = async (email: string, password: string) => {
-    const data = await apiPost<{ token: string; email: string; role: string; displayName: string | null }>(
-      "/api/login", { email, password }
-    );
+    let data: { token: string; email: string; role: string; displayName: string | null };
+
+    if (isFirebaseConfigured()) {
+      const idToken = await firebaseLogin(email, password);
+      data = await apiPost<{ token: string; email: string; role: string; displayName: string | null }>(
+        "/api/auth/firebase", { idToken }
+      );
+    } else {
+      data = await apiPost<{ token: string; email: string; role: string; displayName: string | null }>(
+        "/api/login", { email, password }
+      );
+    }
+
     storeSession(data.token, { email: data.email, role: data.role, displayName: data.displayName });
     await refreshUser();
   };
 
   const register = async (email: string, password: string, opts: RegisterOpts = {}) => {
-    const data = await apiPost<{ token: string; email: string; role: string; displayName: string | null }>(
-      "/api/register", { email, password, ...opts }
-    );
+    let data: { token: string; email: string; role: string; displayName: string | null };
+
+    if (isFirebaseConfigured()) {
+      const idToken = await firebaseRegister(email, password, opts.displayName);
+      data = await apiPost<{ token: string; email: string; role: string; displayName: string | null }>(
+        "/api/auth/firebase", {
+          idToken,
+          role: opts.role ?? "parent",
+          displayName: opts.displayName,
+          preferredLanguage: opts.preferredLanguage ?? "en",
+        }
+      );
+    } else {
+      data = await apiPost<{ token: string; email: string; role: string; displayName: string | null }>(
+        "/api/register", { email, password, ...opts }
+      );
+    }
+
     storeSession(data.token, { email: data.email, role: data.role, displayName: data.displayName });
     await refreshUser();
   };
 
   const logout = async () => {
     await apiPost("/api/logout", {}).catch(() => {});
+    if (isFirebaseConfigured()) {
+      await firebaseLogout().catch(() => {});
+    }
     clearSession();
     setUser(null);
     setActiveChild(null);

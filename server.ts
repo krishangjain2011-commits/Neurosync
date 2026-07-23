@@ -1,3 +1,4 @@
+import "./lib/load-env.js";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -10,26 +11,11 @@ import nodemailer from "nodemailer";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-// Load .env manually (tsx doesn't auto-load dotenv)
-const envFile = path.join(__dirname, ".env");
-if (existsSync(envFile)) {
-  const lines = readFileSync(envFile, "utf8").split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const idx = trimmed.indexOf("=");
-    if (idx === -1) continue;
-    const key = trimmed.slice(0, idx).trim();
-    const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, "");
-    if (key && !process.env[key]) process.env[key] = val;
-  }
-  console.log("[env] Loaded .env from", envFile);
-}
-
 import db from "./db/index.js";
 import {
   createToken, revokeToken, authenticate, requireRole,
-  purgeExpiredTokens,
+  purgeExpiredTokens, isFirebaseAuthEnabled,
+  verifyFirebaseToken, getOrCreateLocalUserForFirebase,
 } from "./lib/auth.js";
 import { assertConsent, revokeConsent, eraseChildData } from "./lib/consent.js";
 import { translateToEnglish, translateFromEnglish } from "./lib/language-bridge.js";
@@ -293,6 +279,36 @@ async function startServer() {
     const token = createToken(user.id);
     setTokenCookie(res, token);
     res.json({ token, email: user.email, role: user.role, displayName: user.display_name });
+  });
+
+  app.post("/api/auth/firebase", authLimiter, async (req, res) => {
+    if (!isFirebaseAuthEnabled()) {
+      return res.status(400).json({ error: "Firebase authentication is not configured" });
+    }
+
+    const { idToken, role, displayName, preferredLanguage, orgId } = req.body;
+    if (!idToken) {
+      return res.status(400).json({ error: "idToken required" });
+    }
+
+    const payload = await verifyFirebaseToken(idToken);
+    if (!payload) {
+      return res.status(401).json({ error: "Invalid Firebase ID token" });
+    }
+
+    const localUser = getOrCreateLocalUserForFirebase(payload, {
+      preferredLanguage,
+      role,
+      displayName,
+      orgId,
+    });
+    if (!localUser) {
+      return res.status(500).json({ error: "Failed to create or map Firebase user" });
+    }
+
+    const token = createToken(localUser.userId);
+    setTokenCookie(res, token);
+    res.json({ token, email: localUser.email, role: localUser.role, displayName: localUser.displayName });
   });
 
   app.post("/api/logout", authenticate, (req, res) => {

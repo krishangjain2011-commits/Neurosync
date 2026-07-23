@@ -47,6 +47,9 @@ db.exec(`
                                     'special_educator','asha_worker','district_admin')),
     display_name     TEXT,
     preferred_language TEXT NOT NULL DEFAULT 'en',
+    firebase_uid     TEXT    UNIQUE,
+    auth_provider    TEXT    NOT NULL DEFAULT 'local'
+                     CHECK(auth_provider IN ('local','firebase')),
     created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -274,6 +277,18 @@ if (!columnExists("users", "org_id")) {
 if (!columnExists("users", "shared_pool_consent")) {
   db.exec(`ALTER TABLE users ADD COLUMN shared_pool_consent INTEGER NOT NULL DEFAULT 1`);
   console.log("[DB] users: added shared_pool_consent (default ON)");
+}
+// v5: Firebase auth metadata
+if (!columnExists("users", "firebase_uid")) {
+  db.exec(`ALTER TABLE users ADD COLUMN firebase_uid TEXT`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid)`);
+  console.log("[DB] users: added firebase_uid");
+} else {
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid)`);
+}
+if (!columnExists("users", "auth_provider")) {
+  db.exec(`ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'local'`);
+  console.log("[DB] users: added auth_provider");
 }
 // Ensure existing users also have it enabled
 db.exec(`UPDATE users SET shared_pool_consent = 1 WHERE shared_pool_consent = 0`);
