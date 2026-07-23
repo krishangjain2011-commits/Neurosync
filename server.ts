@@ -2096,19 +2096,34 @@ If you cannot read the handwriting, return empty strings for text fields, empty 
     });
     app.use(vite.middlewares);
   } else {
-    const distDir = path.join(__dirname, "dist");
-    const altDistDir = path.join(__dirname, "..", "dist");
-    const clientDist = existsSync(distDir) ? distDir : altDistDir;
+    const possibleDistDirs = [
+      path.join(__dirname, "dist"),
+      path.join(__dirname, "..", "dist"),
+      path.join(process.cwd(), "dist"),
+      path.join(process.cwd(), "src", "dist"),
+      path.join(__dirname, "..", "src", "dist"),
+      path.join(__dirname, "..", "..", "dist"),
+    ];
 
-    if (!existsSync(clientDist)) {
-      console.error("[build] Could not find dist directory at", distDir, "or", altDistDir);
-      throw new Error("Client dist folder not found; ensure the frontend build completed successfully");
+    const clientDist = possibleDistDirs.find((dir) => existsSync(dir));
+    if (clientDist) {
+      app.use(express.static(clientDist));
+      app.get("*", (_req, res) => {
+        res.sendFile(path.join(clientDist, "index.html"));
+      });
+      return;
     }
 
-    app.use(express.static(clientDist));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(clientDist, "index.html"));
+    console.warn("[build] Could not find dist directory. Checked:", possibleDistDirs);
+    console.warn("[build] Falling back to Vite middleware for frontend assets in production.");
+
+    const { createServer: createViteServer } = await import("vite");
+    const vite = await createViteServer({
+      server: { middlewareMode: true, hmr: false },
+      appType: "spa",
+      root: process.cwd(),
     });
+    app.use(vite.middlewares);
   }
 
   // Central error handler
