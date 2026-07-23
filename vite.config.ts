@@ -9,6 +9,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, '.'),
     },
   },
+  server: {
+    host: true,
+    allowedHosts: ['.onrender.com'],
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
