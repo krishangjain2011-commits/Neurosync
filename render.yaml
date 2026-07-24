@@ -38,16 +38,6 @@ services:
       # Free tier: ephemeral — use /tmp. Paid: mount a disk at /data.
       - key: UPLOADS_DIR
         value: /tmp/uploads
-
-      # ── Optional ─────────────────────────────────────────────────────────
-      # Email reports (free at resend.com)
-      - key: RESEND_API_KEY
-        sync: false
-
-      # Multilingual (Bhashini India GOI)
-      - key: BHASHINI_API_KEY
-        sync: false
-
       # ML sidecar — not available on Render free tier (Python process).
       # JS fallback embedder is used automatically when this is not set.
       # For real MFCC embeddings, run ml/ locally or on a separate service.

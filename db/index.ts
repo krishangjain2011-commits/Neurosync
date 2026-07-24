@@ -8,14 +8,10 @@
 
 import Database from "better-sqlite3";
 import path from "path";
-import { fileURLToPath } from "url";
 import { existsSync, mkdirSync, unlinkSync } from "fs";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const DB_PATH = process.env.DB_PATH ?? path.join(__dirname, "..", "neurosync.db");
-const FALLBACK_DB_PATH = path.join("/tmp", "neurosync.db");
+const DB_PATH = process.env.DB_PATH ?? path.join(process.cwd(), "neurosync.db");
+const FALLBACK_DB_PATH = path.join(process.cwd(), "tmp", "neurosync.db");
 
 function ensureDirectory(pathToCheck: string): void {
   const dir = path.dirname(pathToCheck);
@@ -52,6 +48,32 @@ try {
 }
 
 export const db = dbInstance;
+
+export function purgeStaleCueMedia(): void {
+  // Fetch paths before nullifying so we can delete from disk
+  const stale: any[] = db.prepare(`
+    SELECT media_ref FROM cue_events
+    WHERE  media_ref IS NOT NULL
+      AND  created_at <= datetime('now', '-30 days')
+  `).all() as any[];
+
+  if (stale.length > 0) {
+    for (const row of stale) {
+      try {
+        if (existsSync(row.media_ref)) unlinkSync(row.media_ref);
+      } catch {
+        // ignore - file may already be gone
+      }
+    }
+
+    db.prepare(`
+      UPDATE cue_events
+      SET    media_ref = NULL
+      WHERE  media_ref IS NOT NULL
+        AND  created_at <= datetime('now', '-30 days')
+    `).run();
+  }
+}
 
 // Performance & integrity
 db.pragma("journal_mode = WAL");
@@ -258,145 +280,5 @@ db.exec(`
     fetched_at  DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
-
-// ─── Safe migrations ─────────────────────────────────────────────────────────
-
-function columnExists(table: string, column: string): boolean {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as any[];
-  return cols.some((c) => c.name === column);
-}
-
-// v3: cue_events — add columns for two-step prediction flow
-if (!columnExists("cue_events", "embedding_vector")) {
-  db.exec(`ALTER TABLE cue_events ADD COLUMN embedding_vector TEXT`);
-  console.log("[DB] cue_events: added embedding_vector");
-}
-if (!columnExists("cue_events", "embedding_model")) {
-  db.exec(`ALTER TABLE cue_events ADD COLUMN embedding_model TEXT`);
-  console.log("[DB] cue_events: added embedding_model");
-}
-if (!columnExists("cue_events", "audio_duration_ms")) {
-  db.exec(`ALTER TABLE cue_events ADD COLUMN audio_duration_ms INTEGER`);
-  console.log("[DB] cue_events: added audio_duration_ms");
-}
-// cue_library — ensure media_ref exists (may be absent on older installs)
-if (!columnExists("cue_library", "media_ref")) {
-  db.exec(`ALTER TABLE cue_library ADD COLUMN media_ref TEXT`);
-  console.log("[DB] cue_library: added media_ref");
-}
-
-// v1 → v2: users table restructure
-if (!columnExists("users", "org_id")) {
-  console.log("[DB] Migrating users table to v2 schema…");
-  // Rename old table, recreate, migrate rows into a default org
-  db.exec(`
-    ALTER TABLE users RENAME TO users_v1;
-    INSERT OR IGNORE INTO organizations (id, name, type) VALUES (1, 'Default Family', 'family');
-  `);
-  // The new users table was already created above by CREATE TABLE IF NOT EXISTS
-  // Migrate old rows
-  const old = db.prepare("SELECT * FROM users_v1").all() as any[];
-  const ins = db.prepare(
-    "INSERT OR IGNORE INTO users (id, org_id, email, password_hash, role, display_name) VALUES (?,1,?,?,?,?)"
-  );
-  for (const u of old) {
-    ins.run(u.id, u.email, u.password || u.password_hash || "", "parent", u.email);
-  }
-  console.log(`[DB] Migrated ${old.length} users.`);
-}
-
-// v4: shared pool consent flag on users — default ON (all users contribute anonymised embeddings)
-if (!columnExists("users", "shared_pool_consent")) {
-  db.exec(`ALTER TABLE users ADD COLUMN shared_pool_consent INTEGER NOT NULL DEFAULT 1`);
-  console.log("[DB] users: added shared_pool_consent (default ON)");
-}
-// Ensure existing users also have it enabled
-db.exec(`UPDATE users SET shared_pool_consent = 1 WHERE shared_pool_consent = 0`);
-
-// v5: rebuild cue_events so matched_cue_id has ON DELETE SET NULL.
-// SQLite cannot alter FK constraints — only way is to recreate the table.
-// We detect whether the fix is needed by checking the CREATE TABLE SQL stored in sqlite_master.
-{
-  const tblInfo: any = db.prepare(
-    "SELECT sql FROM sqlite_master WHERE type='table' AND name='cue_events'"
-  ).get();
-  const needsRebuild = tblInfo?.sql && !tblInfo.sql.includes("ON DELETE SET NULL");
-  if (needsRebuild) {
-    console.log("[DB] Rebuilding cue_events to add ON DELETE SET NULL on matched_cue_id…");
-    db.exec(`
-      PRAGMA foreign_keys = OFF;
-
-      ALTER TABLE cue_events RENAME TO cue_events_old;
-
-      CREATE TABLE cue_events (
-        id                              INTEGER PRIMARY KEY AUTOINCREMENT,
-        child_id                        INTEGER NOT NULL REFERENCES children_profiles(id) ON DELETE CASCADE,
-        media_ref                       TEXT,
-        matched_cue_id                  INTEGER REFERENCES cue_library(id) ON DELETE SET NULL,
-        match_confidence                REAL,
-        ai_interpretations              TEXT,
-        caregiver_selected_interpretation TEXT,
-        escalated                       INTEGER NOT NULL DEFAULT 0,
-        escalated_at                    DATETIME,
-        created_at                      DATETIME DEFAULT CURRENT_TIMESTAMP,
-        embedding_vector                TEXT,
-        embedding_model                 TEXT,
-        audio_duration_ms               INTEGER
-      );
-
-      INSERT INTO cue_events
-        SELECT id, child_id, media_ref, matched_cue_id, match_confidence,
-               ai_interpretations, caregiver_selected_interpretation,
-               escalated, escalated_at, created_at,
-               embedding_vector, embedding_model, audio_duration_ms
-        FROM cue_events_old;
-
-      DROP TABLE cue_events_old;
-
-      CREATE INDEX IF NOT EXISTS idx_cue_events_child   ON cue_events(child_id);
-      CREATE INDEX IF NOT EXISTS idx_cue_events_created ON cue_events(created_at);
-
-      PRAGMA foreign_keys = ON;
-    `);
-    console.log("[DB] cue_events rebuild complete — ON DELETE SET NULL is now active.");
-  }
-}
-
-// Ensure at least one default org exists
-const orgCount = (db.prepare("SELECT COUNT(*) as n FROM organizations").get() as any).n;
-if (orgCount === 0) {
-  db.prepare("INSERT INTO organizations (name, type) VALUES ('Default Family', 'family')").run();
-}
-
-/**
- * Retention policy: nullify media_ref on cue_events older than 30 days.
- * Also deletes the actual file from disk if it still exists.
- * Raw clips must not persist — only embeddings + labels in cue_library are kept.
- */
-export function purgeStaleCueMedia(): void {
-  // Fetch paths before nullifying so we can delete from disk
-  const stale: any[] = db.prepare(`
-    SELECT media_ref FROM cue_events
-    WHERE  media_ref IS NOT NULL
-      AND  created_at <= datetime('now', '-30 days')
-  `).all() as any[];
-
-  if (stale.length > 0) {
-    // Delete files from disk
-    for (const row of stale) {
-      try {
-        if (existsSync(row.media_ref)) unlinkSync(row.media_ref);
-      } catch { /* ignore — file may already be gone */ }
-    }
-
-    const info = db.prepare(`
-      UPDATE cue_events
-      SET    media_ref = NULL
-      WHERE  media_ref IS NOT NULL
-        AND  created_at <= datetime('now', '-30 days')
-    `).run();
-    console.log(`[DB] Purged media_ref + files from ${info.changes} stale cue_events.`);
-  }
-}
 
 export default db;
