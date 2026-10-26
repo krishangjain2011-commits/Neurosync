@@ -5,6 +5,7 @@ import { OfflineProvider } from "./context/OfflineContext";
 import { LangProvider, useLang } from "./context/LangContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import Layout from "./components/Layout";
+import HomePage from "./pages/HomePage";
 import AuthPage from "./pages/AuthPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ChatPage from "./pages/ChatPage";
@@ -37,8 +38,10 @@ function AppRoutes() {
   if (!user) {
     return (
       <Routes>
+        <Route path="/" element={<HomePage />} />
         <Route path="/auth" element={<AuthPage />} />
-        <Route path="*" element={<Navigate to="/auth" replace />} />
+        <Route path="/home" element={<HomePage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
   }
@@ -47,6 +50,7 @@ function AppRoutes() {
   if (user.role === "district_admin") {
     return (
       <Routes>
+        <Route path="/home" element={<HomePage />} />
         <Route path="/" element={<Layout />}>
           <Route index element={<Navigate to="/insights" replace />} />
           <Route path="insights" element={<InsightsPage />} />
@@ -60,6 +64,7 @@ function AppRoutes() {
   if (!activeChild) {
     return (
       <Routes>
+        <Route path="/home" element={<HomePage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="*" element={<Navigate to="/onboarding" replace />} />
       </Routes>
@@ -68,6 +73,7 @@ function AppRoutes() {
 
   return (
     <Routes>
+      <Route path="/home" element={<HomePage />} />
       <Route path="/" element={<Layout />}>
         <Route index element={<Navigate to="/chat" replace />} />
         <Route path="chat"       element={<ChatPage />} />

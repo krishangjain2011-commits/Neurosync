@@ -4,6 +4,9 @@ import { useAuth } from "../context/AuthContext";
 import { useOffline } from "../context/OfflineContext";
 import { useLang } from "../context/LangContext";
 import { apiPost } from "../lib/api";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { Alert } from "../components/ui/Alert";
 import FeatureTour from "../components/FeatureTour";
 
 interface SentenceResult {
@@ -132,17 +135,14 @@ export default function VisualBoardPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", padding: "1.5rem" }}>
+    <div style={{ minHeight: "100vh", padding: "1.5rem", backgroundColor: "#FBF8F3" }}>
       <div style={{ maxWidth: "1080px", margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: "0.9rem", color: "var(--accent)", marginBottom: "0.35rem" }}>{t("visualBoardSubtitle")}</div>
-            <h1 style={{ margin: 0, fontSize: "2rem", lineHeight: 1.1, fontWeight: 800 }}>{t("visualBoardTitle")}</h1>
+            <div style={{ fontSize: "0.9rem", color: "#C07A5E", marginBottom: "0.35rem" }}>{t("visualBoardSubtitle")}</div>
+            <h1 style={{ margin: 0, fontSize: "2rem", lineHeight: 1.1, fontWeight: 800, color: "#2D3748" }}>{t("visualBoardTitle")}</h1>
           </div>
-          <button
-            onClick={() => navigate(-1)}
-            style={{ padding: "0.8rem 1rem", borderRadius: "12px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", cursor: "pointer", fontWeight: 700 }}
-          >Back</button>
+          <Button variant="outline" onClick={() => navigate(-1)}>Back</Button>
         </div>
 
         <FeatureTour
@@ -155,15 +155,15 @@ export default function VisualBoardPage() {
             "Use clear actions like Eat, Drink, or Help.",
             "Save the board so the app can remember when visual communication was used.",
           ]}
-          accentColor="var(--purple)"
+          accentColor="#8DA28B"
         />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "1.25rem" }}>
-          <section style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "18px", padding: "1.25rem" }}>
+          <Card>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", gap: "1rem", flexWrap: "wrap" }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>Card library</h2>
-                <p style={{ margin: "0.4rem 0 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>Tap a card to add or remove it from the visual board.</p>
+                <p style={{ margin: "0.4rem 0 0", fontSize: "0.85rem", color: "#6B7280" }}>Tap a card to add or remove it from the visual board.</p>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
                 {categories.map(category => (
@@ -174,12 +174,13 @@ export default function VisualBoardPage() {
                     style={{
                       padding: "0.5rem 0.75rem",
                       borderRadius: "999px",
-                      border: `1px solid ${activeCategory === category ? "var(--accent)" : "var(--border)"}`,
-                      background: activeCategory === category ? "var(--accent-light)" : "transparent",
-                      color: activeCategory === category ? "var(--accent)" : "var(--text-secondary)",
+                      border: `1px solid ${activeCategory === category ? "#C07A5E" : "#D1D5DB"}`,
+                      background: activeCategory === category ? "#FFE5D9" : "transparent",
+                      color: activeCategory === category ? "#C07A5E" : "#6B7280",
                       cursor: "pointer",
                       fontSize: "0.82rem",
                       fontWeight: 600,
+                      transition: "all 0.15s ease",
                     }}
                   >{category}</button>
                 ))}
@@ -196,9 +197,9 @@ export default function VisualBoardPage() {
                     onClick={() => toggleCard(card.id)}
                     style={{
                       borderRadius: "16px",
-                      border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-                      background: active ? "var(--accent-light)" : "var(--surface-2)",
-                      color: active ? "var(--text-primary)" : "var(--text-secondary)",
+                      border: `2px solid ${active ? "#C07A5E" : "#E5E7EB"}`,
+                      background: active ? "#FFE5D9" : "#F9FAFB",
+                      color: active ? "#C07A5E" : "#1F2937",
                       padding: "1rem",
                       display: "flex",
                       flexDirection: "column",
@@ -207,6 +208,7 @@ export default function VisualBoardPage() {
                       cursor: "pointer",
                       minHeight: "100px",
                       transition: "all 0.15s ease",
+                      fontWeight: 600,
                     }}
                   >
                     <span style={{ fontSize: "1.55rem" }}>{card.emoji}</span>
@@ -215,29 +217,29 @@ export default function VisualBoardPage() {
                 );
               })}
             </div>
-          </section>
+          </Card>
 
-          <aside style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "18px", padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <Card>
             <div>
               <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>Your board</h2>
-              <p style={{ margin: "0.45rem 0 0", fontSize: "0.83rem", color: "var(--text-secondary)" }}>{t("visualBoardEmpty")}</p>
+              <p style={{ margin: "0.45rem 0 0", fontSize: "0.83rem", color: "#6B7280" }}>{t("visualBoardEmpty")}</p>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(80px,1fr))", gap: "0.65rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(80px,1fr))", gap: "0.65rem", marginTop: "1rem" }}>
               {selectedCards.length > 0 ? selectedLabels.map((label, idx) => (
-                <div key={`${label}-${idx}`} style={{ padding: "0.85rem", borderRadius: "14px", background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center", fontSize: "0.9rem", fontWeight: 600 }}>
+                <div key={`${label}-${idx}`} style={{ padding: "0.85rem", borderRadius: "14px", background: "#E8F5F0", border: "1px solid #D1D5DB", textAlign: "center", fontSize: "0.9rem", fontWeight: 600, color: "#047857" }}>
                   {label}
                 </div>
               )) : (
-                <div style={{ gridColumn: "1 / -1", padding: "1rem", borderRadius: "14px", background: "var(--surface-2)", border: "1px dashed var(--border)", color: "var(--text-secondary)", textAlign: "center" }}>
+                <div style={{ gridColumn: "1 / -1", padding: "1rem", borderRadius: "14px", background: "#F3F4F6", border: "1px dashed #D1D5DB", color: "#6B7280", textAlign: "center" }}>
                   {t("visualBoardEmpty")}
                 </div>
               )}
             </div>
 
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
-              <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.45rem" }}>{t("visualBoardResult")}</div>
-              <p style={{ margin: 0, lineHeight: 1.7, color: "var(--text-secondary)" }}>
+            <div style={{ borderTop: "1px solid #E5E7EB", paddingTop: "1rem", marginTop: "1rem" }}>
+              <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1F2937", marginBottom: "0.45rem" }}>{t("visualBoardResult")}</div>
+              <p style={{ margin: 0, lineHeight: 1.7, color: "#6B7280", fontSize: "0.9rem" }}>
                 {sentence
                   ? sentence
                   : selectedLabels.length > 0
@@ -247,79 +249,49 @@ export default function VisualBoardPage() {
             </div>
 
             {error && (
-              <div style={{ color: "var(--red)", background: "var(--red-light)", padding: "0.9rem", borderRadius: "12px", fontSize: "0.85rem" }}>
-                {error}
+              <div style={{ marginTop: "1rem" }}>
+                <Alert type="error" icon="❌">{error}</Alert>
               </div>
             )}
 
-            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-              <button
-                type="button"
+            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "1rem" }}>
+              <Button
+                variant="primary"
                 onClick={buildSentence}
                 disabled={!selectedCards.length || building}
-                style={{
-                  flex: 1,
-                  minWidth: "120px",
-                  padding: "0.95rem 1rem",
-                  borderRadius: "12px",
-                  border: "none",
-                  background: "var(--accent)",
-                  color: "white",
-                  fontWeight: 700,
-                  cursor: selectedCards.length && !building ? "pointer" : "not-allowed",
-                }}
+                style={{ flex: 1, minWidth: "120px" }}
               >
                 {building ? t("visualBoardBuilding") : t("visualBoardBuild")}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="outline"
                 onClick={handleConfirm}
                 disabled={!selectedCards.length || saving}
-                style={{
-                  flex: 1,
-                  minWidth: "120px",
-                  padding: "0.95rem 1rem",
-                  borderRadius: "12px",
-                  border: "1px solid var(--border)",
-                  background: "transparent",
-                  color: "var(--text-primary)",
-                  fontWeight: 700,
-                  cursor: selectedCards.length && !saving ? "pointer" : "not-allowed",
-                }}
+                style={{ flex: 1, minWidth: "120px" }}
               >
                 {saving ? t("visualBoardBuilding") : t("visualBoardConfirm")}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={clearBoard}
-                style={{
-                  flex: 1,
-                  minWidth: "120px",
-                  padding: "0.95rem 1rem",
-                  borderRadius: "12px",
-                  border: "1px solid var(--border)",
-                  background: "transparent",
-                  color: "var(--text-primary)",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
+                style={{ flex: 1, minWidth: "120px" }}
               >
                 {t("visualBoardClear")}
-              </button>
+              </Button>
             </div>
 
             {saved && (
-              <div style={{ padding: "0.9rem", borderRadius: "12px", background: "var(--green-light)", color: "var(--green)", fontWeight: 600, textAlign: "center" }}>
+              <div style={{ marginTop: "1rem", padding: "0.9rem", borderRadius: "12px", background: "#D1F2EB", color: "#047857", fontWeight: 600, textAlign: "center", fontSize: "0.9rem" }}>
                 {t("visualBoardSaved")}
               </div>
             )}
 
             {!isOnline && (
-              <div style={{ padding: "0.9rem", borderRadius: "12px", background: "var(--amber-light)", color: "var(--amber)", fontSize: "0.85rem", lineHeight: 1.6 }}>
+              <Alert type="warning" icon="⚠️" style={{ marginTop: "1rem" }}>
                 Offline mode: saving will work when your device returns online.
-              </div>
+              </Alert>
             )}
-          </aside>
+          </Card>
         </div>
       </div>
     </div>

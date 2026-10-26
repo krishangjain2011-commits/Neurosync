@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { apiPost, apiGet, apiPatch, apiDelete, apiPostFormData } from "../lib/api";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { Alert } from "../components/ui/Alert";
 import FeatureTour from "../components/FeatureTour";
 
 // ── YouTube video type ─────────────────────────────────────────────────────
@@ -45,9 +48,9 @@ const SUBJECTS = ["Math","Reading","Writing","Science","Social Studies","Art","M
 const DIFFICULTIES = ["Beginner","Elementary","Intermediate","Advanced"];
 const LEARNING_STYLES = ["Visual","Auditory","Kinesthetic","Multi-modal"];
 const STYLE_ICONS: Record<string, { emoji: string; color: string; bg: string }> = {
-  visual:      { emoji: "👁️", color: "var(--accent)",  bg: "var(--accent-light)" },
-  auditory:    { emoji: "👂", color: "var(--green)",   bg: "var(--green-light)"  },
-  kinesthetic: { emoji: "✋", color: "var(--amber)",   bg: "var(--amber-light)"  },
+  visual:      { emoji: "👁️", color: "#C07A5E",  bg: "#FFE5D9" },
+  auditory:    { emoji: "👂", color: "#8DA28B",   bg: "#E8F5F0"  },
+  kinesthetic: { emoji: "✋", color: "#D4A574",   bg: "#FDF5E8"  },
 };
 
 // ── Tab types ──────────────────────────────────────────────────────────────
@@ -426,14 +429,14 @@ Return as JSON:
   };
 
   return (
-    <div style={{ padding: "1.5rem", maxWidth: "780px", margin: "0 auto" }}>
+    <div style={{ padding: "1.5rem", maxWidth: "780px", margin: "0 auto", backgroundColor: "#FBF8F3", minHeight: "100vh" }}>
       {/* Header */}
       <div style={{ marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.4rem" }}>
           <span style={{ fontSize: "1.5rem" }}>📚</span>
-          <h1 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>Homeschooling Helper</h1>
+          <h1 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "#2D3748" }}>Homeschooling Helper</h1>
         </div>
-        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+        <p style={{ margin: 0, fontSize: "0.85rem", color: "#6B7280" }}>
           Multi-modal lesson plans · Dyslexia-aware handwriting interpreter
         </p>
       </div>
@@ -451,11 +454,11 @@ Return as JSON:
           "Pattern counts are automatically added to the Progress Tracker so you can see trends over weeks.",
           "Handwriting Interpreter uses Mistral AI vision — works with your existing MISTRAL_API_KEY.",
         ]}
-        accentColor="var(--blue)"
+        accentColor="#5B7B94"
       />
 
       {/* Tab switcher */}
-      <div style={{ display: "flex", backgroundColor: "var(--surface-2)", borderRadius: "10px", padding: "3px", marginBottom: "1.5rem", gap: "2px" }}>
+      <div style={{ display: "flex", backgroundColor: "#F3F4F6", borderRadius: "10px", padding: "3px", marginBottom: "1.5rem", gap: "2px" }}>
         {([
           { id: "lesson",      label: "📖 Lesson Planner" },
           { id: "handwriting", label: "✍️ Handwriting Interpreter" },
@@ -464,8 +467,8 @@ Return as JSON:
             style={{
               flex: 1, padding: "0.5rem 0.75rem", borderRadius: "8px", border: "none",
               cursor: "pointer", fontSize: "0.83rem", fontWeight: tab === t.id ? 600 : 400,
-              backgroundColor: tab === t.id ? "var(--canvas)" : "transparent",
-              color: tab === t.id ? "var(--accent)" : "var(--text-muted)",
+              backgroundColor: tab === t.id ? "#FFFFFF" : "transparent",
+              color: tab === t.id ? "#C07A5E" : "#6B7280",
               boxShadow: tab === t.id ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
               transition: "all 0.15s",
             }}>
@@ -479,10 +482,10 @@ Return as JSON:
         <HandwritingTool childId={activeChild.id} />
       )}
       {tab === "handwriting" && !activeChild && (
-        <div className="card" style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-muted)" }}>
+        <Card style={{ textAlign: "center", padding: "2.5rem", color: "#9CA3AF" }}>
           <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>✍️</div>
           <p style={{ margin: 0, fontSize: "0.875rem" }}>No child profile selected. Pick one from the sidebar to use the Handwriting Interpreter.</p>
-        </div>
+        </Card>
       )}
 
       {/* Lesson Planner tab */}

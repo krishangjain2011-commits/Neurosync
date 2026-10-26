@@ -40,7 +40,6 @@ interface AuthContextType {
   activeChild: ChildProfile | null;
   setActiveChild: (c: ChildProfile | null) => void;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, opts?: RegisterOpts) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   addChild: (data: OnboardingData) => Promise<ChildProfile>;
@@ -142,14 +141,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refreshUser();
   };
 
-  const register = async (email: string, password: string, opts: RegisterOpts = {}) => {
-    const data = await apiPost<{ token: string; email: string; role: string; displayName: string | null }>(
-      "/api/register", { email, password, ...opts }
-    );
-    storeSession(data.token, { email: data.email, role: data.role, displayName: data.displayName });
-    await refreshUser();
-  };
-
   const logout = async () => {
     await apiPost("/api/logout", {}).catch(() => {});
     clearSession();
@@ -172,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, loading, activeChild, setActiveChild: handleSetActiveChild,
-      login, register, logout, refreshUser, addChild,
+      login, logout, refreshUser, addChild,
     }}>
       {children}
     </AuthContext.Provider>

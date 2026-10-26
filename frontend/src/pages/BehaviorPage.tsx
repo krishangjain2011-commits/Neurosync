@@ -10,6 +10,11 @@ import {
   type LocalModel,
 } from "../lib/cue-model";
 import FeatureTour from "../components/FeatureTour";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { Alert } from "../components/ui/Alert";
+import { Input } from "../components/ui/Input";
+import { FormGroup } from "../components/ui/FormGroup";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -120,19 +125,19 @@ function AudioRecorder({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.875rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
       {/* Record + Attach row */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
         {/* Record button */}
         <button
           onClick={recording ? stopRec : startRec}
           style={{
-            width: "80px", height: "80px", borderRadius: "50%", border: "none", cursor: "pointer",
+            width: "90px", height: "90px", borderRadius: "var(--radius-full)", border: "none", cursor: "pointer",
             background: recording
-              ? "linear-gradient(135deg, var(--red), #b83f3f)"
-              : "linear-gradient(135deg, var(--accent), var(--accent-dark, #6d28d9))",
-            color: "white", fontSize: "2rem", display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: recording ? "0 0 0 8px rgba(220,38,38,0.2)" : "0 4px 16px rgba(139,92,246,0.4)",
+              ? "linear-gradient(135deg, var(--color-error), #b83f3f)"
+              : "var(--gradient-success)",
+            color: "white", fontSize: "2.25rem", display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: recording ? "0 0 0 10px rgba(220, 38, 38, 0.15)" : "0 6px 20px rgba(141, 162, 139, 0.25)",
             animation: recording ? "pulse-ring 1.5s infinite" : "none",
             transition: "all 0.2s",
           }}
@@ -142,28 +147,28 @@ function AudioRecorder({
         </button>
 
         {/* Divider */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.2rem" }}>
-          <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)" }} />
-          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", fontWeight: 600 }}>OR</span>
-          <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)" }} />
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.3rem" }}>
+          <div style={{ width: "1px", height: "24px", backgroundColor: "var(--color-secondary-soft)" }} />
+          <span style={{ fontSize: "0.7rem", color: "var(--color-text-muted)", fontWeight: 600, letterSpacing: "0.5px" }}>OR</span>
+          <div style={{ width: "1px", height: "24px", backgroundColor: "var(--color-secondary-soft)" }} />
         </div>
 
         {/* File attach button */}
         <button
           onClick={() => fileRef.current?.click()}
           style={{
-            width: "80px", height: "80px", borderRadius: "50%", border: "2px dashed var(--border)",
-            cursor: "pointer", background: "var(--canvas)",
-            color: "var(--text-muted)", fontSize: "1.5rem",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "2px",
+            width: "90px", height: "90px", borderRadius: "var(--radius-lg)", border: `2px dashed var(--color-accent)`,
+            cursor: "pointer", background: "var(--color-accent-soft)",
+            color: "var(--color-accent-dark)", fontSize: "1.75rem",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px",
             transition: "all 0.2s",
           }}
           aria-label="Attach audio file"
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)"; (e.currentTarget as HTMLElement).style.color = "var(--accent)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--color-accent-dark)"; (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-accent-soft)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--color-accent)"; (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-accent-soft)"; }}
         >
           📎
-          <span style={{ fontSize: "0.55rem", fontWeight: 600, letterSpacing: "0.02em" }}>ATTACH</span>
+          <span style={{ fontSize: "0.6rem", fontWeight: 600, letterSpacing: "0.05em" }}>ATTACH</span>
         </button>
         <input
           ref={fileRef}
@@ -175,37 +180,36 @@ function AudioRecorder({
       </div>
 
       {recording && (
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--red)", fontWeight: 600, fontSize: "0.85rem" }}>
-          <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--red)", animation: "pulse-dot 1s infinite" }} />
-          Recording… {duration}s (tap ⏹ to stop)
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", color: "var(--color-error)", fontWeight: 600, fontSize: "0.9rem" }}>
+          <motion.div animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 1, repeat: Infinity }} style={{ width: "10px", height: "10px", borderRadius: "var(--radius-full)", backgroundColor: "var(--color-error)" }} />
+          Recording… {duration}s
         </div>
       )}
 
       {!recording && !audioURL && (
-        <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-muted)", textAlign: "center" }}>
-          Record live (5–15 sec) or attach an existing audio file (m4a, mp3, wav, ogg, webm)
+        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-muted)", textAlign: "center", lineHeight: 1.5 }}>
+          Record live (5–15 sec) or attach an existing audio file
         </p>
       )}
 
       {audioURL && !recording && (
-        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          <audio src={audioURL} controls style={{ width: "100%", borderRadius: "8px" }} />
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {fileName ? `📎 ${fileName}` : `✅ Recording ready${duration > 0 ? ` (${duration}s)` : ""}`}
+        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <audio src={audioURL} controls style={{ width: "100%", borderRadius: "var(--radius-lg)", height: "32px" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {fileName ? `📎 ${fileName}` : `✅ Ready${duration > 0 ? ` (${duration}s)` : ""}`}
             </span>
-            <button onClick={reset} style={{ fontSize: "0.72rem", padding: "0.2rem 0.5rem", borderRadius: "5px", border: "1px solid var(--border)", backgroundColor: "var(--canvas)", cursor: "pointer", color: "var(--text-secondary)", flexShrink: 0 }}>
+            <button onClick={reset} style={{ fontSize: "0.75rem", padding: "0.4rem 0.75rem", borderRadius: "var(--radius-md)", border: `1px solid var(--color-secondary-soft)`, backgroundColor: "var(--color-surface)", cursor: "pointer", color: "var(--color-text-muted)", flexShrink: 0, fontWeight: 500 }}>
               {fileName ? "Re-attach" : "Re-record"}
             </button>
           </div>
         </div>
       )}
 
-      {error && <p style={{ margin: 0, color: "var(--red)", fontSize: "0.8rem" }}>{error}</p>}
+      {error && <Alert type="error">{error}</Alert>}
 
       <style>{`
         @keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(220,38,38,0.4)}70%{box-shadow:0 0 0 16px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}
-        @keyframes pulse-dot{0%,100%{opacity:0.4;transform:scale(0.9)}50%{opacity:1;transform:scale(1)}}
       `}</style>
     </div>
   );
@@ -493,72 +497,131 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
   if (mode === "home") return (
     <div>
       {/* Training progress banner */}
-      <div style={{ padding: "1rem 1.25rem", background: "linear-gradient(90deg, var(--accent-light), var(--honey-light))", border: "1px solid var(--border)", borderRadius: "12px", marginBottom: "1.25rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-          <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+      <Card size="md" style={{
+        background: "linear-gradient(135deg, var(--color-accent-soft) 0%, var(--color-secondary-soft) 100%)",
+        border: `1px solid var(--color-accent)`,
+        marginBottom: "1.5rem",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+          <span style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--color-text)" }}>
             {isTrained
               ? `✅ Model trained — ${cueCount} audio cues saved`
               : `🎓 Training: ${cueCount} / ${MIN_CUES_FOR_TRAINING} audio cues added`}
           </span>
           {localModel && (
-            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
               Synced: {new Date(localModel.savedAt).toLocaleDateString("en-IN")}
             </span>
           )}
         </div>
-        <div style={{ height: "8px", backgroundColor: "var(--surface-2)", borderRadius: "4px", overflow: "hidden" }}>
-          <div style={{
-            height: "100%",
-            width: `${Math.min(100, (cueCount / MIN_CUES_FOR_TRAINING) * 100)}%`,
-            background: isTrained
-              ? "linear-gradient(90deg, var(--green), var(--accent))"
-              : "linear-gradient(90deg, var(--amber), var(--accent))",
-            borderRadius: "4px", transition: "width 0.5s ease",
-          }} />
+        <div style={{
+          height: "8px",
+          backgroundColor: "var(--color-secondary-soft)",
+          borderRadius: "var(--radius-full)",
+          overflow: "hidden",
+        }}>
+          <motion.div
+            animate={{ width: `${Math.min(100, (cueCount / MIN_CUES_FOR_TRAINING) * 100)}%` }}
+            style={{
+              height: "100%",
+              background: isTrained
+                ? "var(--gradient-success)"
+                : "var(--gradient-primary)",
+              borderRadius: "var(--radius-full)",
+            }}
+            transition={{ duration: 0.5 }}
+          />
         </div>
         {!isTrained && (
-          <p style={{ margin: "0.5rem 0 0", fontSize: "0.78rem", color: "var(--text-secondary)" }}>
-            Add {remaining} more audio cue{remaining !== 1 ? "s" : ""} to enable personalised matching.
-            The model is stored <strong>only on this device</strong>.
+          <p style={{
+            margin: "0.75rem 0 0",
+            fontSize: "0.8rem",
+            color: "var(--color-text-muted)",
+            lineHeight: 1.6,
+          }}>
+            Add {remaining} more audio cue{remaining !== 1 ? "s" : ""} to enable personalised matching. The model is stored <strong>only on this device</strong>.
           </p>
         )}
-      </div>
+      </Card>
 
       {/* Privacy notice */}
-      <div style={{ padding: "0.75rem 1rem", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "10px", marginBottom: "1.25rem", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.65 }}>
-        🔒 <strong>Privacy:</strong> Audio recordings are used only to extract MFCC patterns via a local Python model — raw clips auto-delete after 30 days. The trained model is stored <strong>locally on this device</strong> and never shared. Every capture is caregiver-initiated.
-      </div>
+      <Alert type="info" style={{ marginBottom: "1.5rem", fontSize: "0.85rem" }}>
+        🔒 <strong>Privacy:</strong> Audio recordings extract MFCC patterns via local Python — raw clips auto-delete after 30 days. Trained model stored <strong>only locally</strong>, never shared.
+      </Alert>
 
       {/* Action cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-        <button onClick={() => { setError(""); setMode("teach"); }} style={{ padding: "1.25rem", borderRadius: "12px", border: "1.5px solid var(--green)", background: "linear-gradient(135deg, var(--green-light), var(--surface))", cursor: "pointer", textAlign: "left" }}>
-          <div style={{ fontSize: "1.6rem", marginBottom: "0.4rem" }}>🎓</div>
-          <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--green)", marginBottom: "0.2rem" }}>Teach a Cue</div>
-          <div style={{ fontSize: "0.73rem", color: "var(--text-muted)", lineHeight: 1.5 }}>Record audio of a known behaviour and label it</div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "1rem",
+        marginBottom: "1.5rem",
+      }}>
+        <button
+          onClick={() => { setError(""); setMode("teach"); }}
+          style={{
+            padding: "1.5rem",
+            borderRadius: "var(--radius-lg)",
+            border: `2px solid var(--color-success)`,
+            background: "var(--color-accent-soft)",
+            cursor: "pointer",
+            textAlign: "left",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-accent)";
+            (e.currentTarget as HTMLElement).style.color = "white";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-accent-soft)";
+            (e.currentTarget as HTMLElement).style.color = "inherit";
+          }}
+        >
+          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🎓</div>
+          <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--color-accent-dark)", marginBottom: "0.25rem" }}>Teach a Cue</div>
+          <div style={{ fontSize: "0.8rem", color: "var(--color-text-muted)", lineHeight: 1.5 }}>Record audio of a known behaviour and label it</div>
         </button>
+
         <button
           onClick={() => { setError(""); setMode("recognize"); }}
-          style={{ padding: "1.25rem", borderRadius: "12px", border: "1.5px solid var(--accent)", background: "linear-gradient(135deg, var(--accent-light), var(--surface))", cursor: "pointer", textAlign: "left" }}
+          style={{
+            padding: "1.5rem",
+            borderRadius: "var(--radius-lg)",
+            border: `2px solid var(--color-primary)`,
+            background: "var(--color-primary-soft)",
+            cursor: "pointer",
+            textAlign: "left",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-primary)";
+            (e.currentTarget as HTMLElement).style.color = "white";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-primary-soft)";
+            (e.currentTarget as HTMLElement).style.color = "inherit";
+          }}
         >
-          <div style={{ fontSize: "1.6rem", marginBottom: "0.4rem" }}>🔍</div>
-          <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--accent)", marginBottom: "0.2rem" }}>Interpret Now</div>
-          <div style={{ fontSize: "0.73rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-            {isTrained ? "Match audio against trained model" : "Record audio — we'll match or help you label it"}
+          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🔍</div>
+          <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--color-primary-dark)", marginBottom: "0.25rem" }}>Interpret Now</div>
+          <div style={{ fontSize: "0.8rem", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+            {isTrained ? "Match audio against trained model" : "Record audio — we'll match or label it"}
           </div>
         </button>
       </div>
 
-      {error && (
-        <div style={{ padding: "0.6rem 0.875rem", backgroundColor: "var(--amber-light)", color: "var(--amber)", borderRadius: "8px", marginBottom: "1rem", fontSize: "0.82rem", fontWeight: 500 }}>
-          {error}
-        </div>
-      )}
+      {error && <Alert type="error" style={{ marginBottom: "1rem" }}>{error}</Alert>}
 
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <button className="btn-secondary" onClick={() => setMode("library")}>📚 Library ({cueCount})</button>
-        <button className="btn-secondary" onClick={syncLocalModel} disabled={syncingModel}>
+      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        <Button variant="secondary" onClick={() => setMode("library")}>
+          📚 Library ({cueCount})
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={syncLocalModel}
+          disabled={syncingModel}
+        >
           {syncingModel ? "Syncing…" : "🔄 Sync Local Model"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -566,109 +629,171 @@ function BehaviorTab({ activeChild, isOnline }: { activeChild: any; isOnline: bo
   // ── Teach mode ────────────────────────────────────────────────────────────────
   if (mode === "teach") return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="card">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.75rem" }}>
-          <span style={{ fontSize: "1.3rem" }}>🎓</span>
-          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>Teach a Cue ({cueCount}/{MIN_CUES_FOR_TRAINING})</h2>
+      <Card size="md">
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+          <span style={{ fontSize: "1.5rem" }}>🎓</span>
+          <h2 style={{
+            margin: 0,
+            fontSize: "1.125rem",
+            fontWeight: 700,
+            color: "var(--color-text)",
+          }}>
+            Teach a Cue ({cueCount}/{MIN_CUES_FOR_TRAINING})
+          </h2>
         </div>
-        <p style={{ margin: "0 0 1rem", fontSize: "0.83rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-          Record a <strong>5–15 second audio clip</strong> of {childName}'s sound or vocalisation, then label what it means.
+        <p style={{
+          margin: "0 0 1.5rem",
+          fontSize: "0.9rem",
+          color: "var(--color-text-muted)",
+          lineHeight: 1.6,
+        }}>
+          Record a <strong>5–15 second audio clip</strong> of {childName}'s sound, then label what it means.
           Add at least <strong>{MIN_CUES_FOR_TRAINING} different cues</strong> to train the personalised model.
         </p>
         <AudioRecorder onRecorded={(blob, b64) => { setAudioBlob(blob); setAudioB64(b64); }} />
-        <div style={{ marginTop: "1rem" }}>
-          <label className="label">What does this mean? (use your own words)</label>
-          <input
-            className="input"
-            value={teachLabel}
-            onChange={e => setTeachLabel(e.target.value)}
-            placeholder='e.g. "wants water", "feeling overwhelmed", "needs a break"'
-          />
+        <div style={{ marginTop: "1.5rem" }}>
+          <FormGroup label="What does this mean? (use your own words)" required>
+            <Input
+              value={teachLabel}
+              onChange={e => setTeachLabel(e.target.value)}
+              placeholder='e.g. "wants water", "feeling overwhelmed", "needs a break"'
+            />
+          </FormGroup>
         </div>
-        {error && (
-          <div style={{ marginTop: "0.6rem", padding: "0.6rem 0.875rem", backgroundColor: "var(--red-light)", color: "var(--red)", borderRadius: "8px", fontSize: "0.83rem" }}>
-            {error}
-          </div>
-        )}
-        <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.25rem" }}>
-          <button className="btn-primary" onClick={handleTeach} disabled={loading || !audioBlob || !teachLabel.trim()}>
-            {loading
-              ? <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><div className="spinner" style={{ width: "14px", height: "14px" }} />Saving…</span>
-              : "💾 Save Cue"}
-          </button>
-          <button className="btn-secondary" onClick={resetFlow}>Cancel</button>
+        {error && <Alert type="error" style={{ marginTop: "1rem" }}>{error}</Alert>}
+        <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
+          <Button
+            variant="success"
+            onClick={handleTeach}
+            disabled={loading || !audioBlob || !teachLabel.trim()}
+            loading={loading}
+          >
+            💾 Save Cue
+          </Button>
+          <Button variant="secondary" onClick={resetFlow}>Cancel</Button>
         </div>
         {cueCount > 0 && (
-          <p style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: isTrained ? "var(--green)" : "var(--amber)", fontWeight: 500 }}>
+          <p style={{
+            marginTop: "1rem",
+            fontSize: "0.8rem",
+            color: isTrained ? "var(--color-success)" : "var(--color-warning)",
+            fontWeight: 500,
+          }}>
             {isTrained
               ? `✅ Model trained with ${cueCount} cues!`
               : `${remaining} more cue${remaining !== 1 ? "s" : ""} needed to activate personalised matching`}
           </p>
         )}
-      </div>
+      </Card>
     </motion.div>
   );
 
   // ── Recognize mode ────────────────────────────────────────────────────────────
   if (mode === "recognize") return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="card">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.75rem" }}>
-          <span style={{ fontSize: "1.3rem" }}>🔍</span>
-          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>Interpret Now</h2>
+      <Card size="md">
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+          <span style={{ fontSize: "1.5rem" }}>🔍</span>
+          <h2 style={{
+            margin: 0,
+            fontSize: "1.125rem",
+            fontWeight: 700,
+            color: "var(--color-text)",
+          }}>
+            Interpret Now
+          </h2>
         </div>
-        <p style={{ margin: "0 0 1rem", fontSize: "0.83rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+        <p style={{
+          margin: "0 0 1.5rem",
+          fontSize: "0.9rem",
+          color: "var(--color-text-muted)",
+          lineHeight: 1.6,
+        }}>
           Record what you're hearing. The app will match it against {childName}'s{" "}
           <strong>locally stored model</strong> ({cueCount} trained cues). Matching happens on-device — no audio leaves your phone.
         </p>
         <AudioRecorder onRecorded={(blob, b64) => { setAudioBlob(blob); setAudioB64(b64); }} />
-        <div style={{ marginTop: "0.875rem" }}>
-          <label className="label">Optional: briefly describe what you're observing</label>
-          <input
-            className="input"
-            value={mediaDesc}
-            onChange={e => setMediaDesc(e.target.value)}
-            placeholder='e.g. "high-pitched hum, rocking back and forth"'
-          />
-          <p style={{ margin: "0.3rem 0 0", fontSize: "0.73rem", color: "var(--text-muted)" }}>
-            Used only if AI interpretation is requested — stored with the event for your reference.
-          </p>
+        <div style={{ marginTop: "1.5rem" }}>
+          <FormGroup
+            label="Optional: briefly describe what you're observing"
+            helperText="Used only if AI interpretation is requested — stored with the event for your reference."
+          >
+            <Input
+              value={mediaDesc}
+              onChange={e => setMediaDesc(e.target.value)}
+              placeholder='e.g. "high-pitched hum, rocking back and forth"'
+            />
+          </FormGroup>
         </div>
-        {error && (
-          <div style={{ marginTop: "0.6rem", padding: "0.6rem 0.875rem", backgroundColor: "var(--red-light)", color: "var(--red)", borderRadius: "8px", fontSize: "0.83rem" }}>
-            {error}
-          </div>
-        )}
-        <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.25rem" }}>
-          <button className="btn-primary" onClick={handleRecognize} disabled={loading || !audioBlob || !isOnline}>
-            {loading
-              ? <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><div className="spinner" style={{ width: "14px", height: "14px" }} />Matching…</span>
-              : "🔍 Interpret"}
-          </button>
-          <button className="btn-secondary" onClick={resetFlow}>Cancel</button>
+        {error && <Alert type="error" style={{ marginTop: "1rem" }}>{error}</Alert>}
+        <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
+          <Button
+            variant="primary"
+            onClick={handleRecognize}
+            disabled={loading || !audioBlob || !isOnline}
+            loading={loading}
+          >
+            🔍 Interpret
+          </Button>
+          <Button variant="secondary" onClick={resetFlow}>Cancel</Button>
         </div>
-      </div>
+      </Card>
     </motion.div>
   );
 
   // ── Match result ──────────────────────────────────────────────────────────────
   if (mode === "result_match" && matchResult) return (
     <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}>
-      <div className="card" style={{ borderLeft: "4px solid var(--green)", background: "linear-gradient(135deg, var(--green-light), var(--surface))", textAlign: "center", padding: "2rem" }}>
-        <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>✅</div>
-        <h2 style={{ margin: "0 0 0.5rem", fontSize: "1.1rem", fontWeight: 700, color: "var(--green)" }}>Cue Recognised!</h2>
-        <div style={{ fontSize: "1.4rem", fontWeight: 700, margin: "0.75rem 0" }}>"{matchResult.label}"</div>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.875rem", backgroundColor: "var(--green-light)", color: "var(--green)", borderRadius: "999px", fontSize: "0.8rem", fontWeight: 600, marginBottom: "1.25rem" }}>
+      <Card size="md" style={{
+        background: "linear-gradient(135deg, var(--color-accent-soft) 0%, var(--color-surface) 100%)",
+        border: `2px solid var(--color-accent)`,
+        textAlign: "center",
+        padding: "2.5rem 2rem",
+      }}>
+        <div style={{ fontSize: "3.5rem", marginBottom: "1rem" }}>✅</div>
+        <h2 style={{
+          margin: "0 0 0.75rem",
+          fontSize: "1.25rem",
+          fontWeight: 700,
+          color: "var(--color-accent-dark)",
+        }}>
+          Cue Recognised!
+        </h2>
+        <div style={{
+          fontSize: "1.5rem",
+          fontWeight: 700,
+          margin: "1rem 0",
+          color: "var(--color-text)",
+        }}>
+          "{matchResult.label}"
+        </div>
+        <div style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          padding: "0.5rem 1rem",
+          backgroundColor: "var(--color-accent)",
+          color: "white",
+          borderRadius: "var(--radius-full)",
+          fontSize: "0.85rem",
+          fontWeight: 600,
+          marginBottom: "1.5rem",
+        }}>
           {matchResult.confidence}% confidence · local MFCC model
         </div>
-        <p style={{ margin: "0 0 1.5rem", fontSize: "0.83rem", color: "var(--text-secondary)" }}>
+        <p style={{
+          margin: "0 0 2rem",
+          fontSize: "0.9rem",
+          color: "var(--color-text-muted)",
+          lineHeight: 1.6,
+        }}>
           Matched against {childName}'s saved cue library stored on this device.
         </p>
         <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
-          <button className="btn-primary" onClick={resetFlow}>Interpret Another</button>
-          <button className="btn-secondary" onClick={() => setMode("library")}>View Library</button>
+          <Button variant="success" onClick={resetFlow}>Interpret Another</Button>
+          <Button variant="secondary" onClick={() => setMode("library")}>View Library</Button>
         </div>
-      </div>
+      </Card>
     </motion.div>
   );
 

@@ -81,6 +81,7 @@ db.pragma("foreign_keys = ON");
 db.pragma("synchronous = NORMAL");
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
+// Create all tables first
 
 db.exec(`
   -- Tenants / organisations
@@ -280,5 +281,14 @@ db.exec(`
     fetched_at  DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+// ─── Bootstrap default organization ───────────────────────────────────────
+// Ensure organization 1 exists for user registration
+const defaultOrg = db.prepare("SELECT id FROM organizations WHERE id = 1").get();
+if (!defaultOrg) {
+  db.prepare(
+    "INSERT INTO organizations (id, name, type, region_code) VALUES (?,?,?,?)"
+  ).run(1, "Default Organization", "family", null);
+}
 
 export default db;

@@ -2,6 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { apiGet, apiPost, apiDelete } from "../lib/api";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { Alert } from "../components/ui/Alert";
+import { Input } from "../components/ui/Input";
+import { FormGroup } from "../components/ui/FormGroup";
 import FeatureTour from "../components/FeatureTour";
 
 interface ShareEntry {
@@ -46,12 +51,12 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_COLORS: Record<string, string> = {
-  parent:           "var(--accent)",
-  caregiver:        "var(--blue)",
-  anganwadi_worker: "var(--green)",
-  special_educator: "var(--amber)",
-  asha_worker:      "var(--green)",
-  district_admin:   "var(--red)",
+  parent:           "#C07A5E",
+  caregiver:        "#5B7B94",
+  anganwadi_worker: "#8DA28B",
+  special_educator: "#D4A574",
+  asha_worker:      "#8DA28B",
+  district_admin:   "#DC2626",
 };
 
 export default function ReportsPage() {
@@ -159,10 +164,10 @@ export default function ReportsPage() {
         <title>NeuroSync Report — ${report?.child.name}</title>
         <style>
           body { font-family: Georgia, serif; padding: 2rem; color: #2C1F14; max-width: 800px; margin: 0 auto; background:#fff; }
-          h1 { font-size: 1.5rem; color: #8B5CF6; margin-bottom: 0.25rem; }
+          h1 { font-size: 1.5rem; color: #C07A5E; margin-bottom: 0.25rem; }
           h2 { font-size: 1.1rem; border-bottom: 1px solid #E8DCCF; padding-bottom: 0.3rem; margin-top: 1.5rem; }
           h3 { font-size: 0.95rem; margin: 0.75rem 0 0.3rem; color: #6B4F38; }
-          .tag { display: inline-block; background: #F3EEFF; color: #6D28D9; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.8rem; margin: 0.15rem; }
+          .tag { display: inline-block; background: #FFE5D9; color: #C07A5E; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.8rem; margin: 0.15rem; }
           .metric { display: flex; justify-content: space-between; padding: 0.35rem 0; border-bottom: 1px solid #F2E9DC; font-size: 0.9rem; }
           .narrative { line-height: 1.8; font-size: 0.95rem; white-space: pre-wrap; }
           .footer { margin-top: 2rem; font-size: 0.75rem; color: #A08468; border-top: 1px solid #E8DCCF; padding-top: 0.75rem; }
@@ -236,19 +241,38 @@ export default function ReportsPage() {
   const childName = activeChild?.onboarding_data?.childName ?? "Child";
 
   return (
-    <div style={{ padding: "1.5rem", maxWidth: "800px", margin: "0 auto" }}>
+    <div style={{ padding: "1.5rem", maxWidth: "900px", margin: "0 auto", backgroundColor: "#FBF8F3", minHeight: "100vh" }}>
       {/* Header */}
-      <div style={{ marginBottom: "1.75rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.4rem" }}>
+      <div style={{ marginBottom: "2rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.5rem" }}>
           <div style={{
-            width: "40px", height: "40px", borderRadius: "10px",
-            background: "linear-gradient(135deg, var(--green) 0%, var(--blue) 100%)",
-            display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem",
-          }}>📋</div>
+            width: "48px",
+            height: "48px",
+            borderRadius: "12px",
+            background: "linear-gradient(135deg, #8DA28B 0%, #5B7B94 100%)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "1.5rem",
+            boxShadow: "0 2px 8px rgba(141, 162, 139, 0.15)",
+          }}>
+            📋
+          </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>Reports & Sharing</h1>
-            <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)" }}>
-              Generate progress reports and share with Anganwadi workers, schools, or doctors
+            <h1 style={{
+              margin: 0,
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              color: "#2D3748",
+            }}>
+              Reports & Sharing
+            </h1>
+            <p style={{
+              margin: "0.25rem 0 0",
+              fontSize: "0.85rem",
+              color: "#6B7280",
+            }}>
+              Generate progress reports and share with institutions or specialists.
             </p>
           </div>
         </div>
@@ -266,74 +290,81 @@ export default function ReportsPage() {
           "Share tab: grant a worker or teacher access to your child's profile using their email — they must have a NeuroSync account.",
           "You can revoke access at any time from the Share tab.",
         ]}
-        accentColor="var(--green)"
+        accentColor="#8DA28B"
       />
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
+      <div style={{
+        display: "flex",
+        gap: "0.75rem",
+        marginBottom: "2rem",
+        borderBottom: "2px solid #E8F5F0",
+        paddingBottom: "1rem",
+        flexWrap: "wrap",
+      }}>
         {([
           { key: "report", label: "📄 Generate Report" },
           { key: "share",  label: `👥 Share Access (${shares.length})` },
         ] as const).map(t => (
-          <button key={t.key} onClick={() => setTab(t.key as any)} style={{
-            padding: "0.5rem 1.25rem", borderRadius: "10px", cursor: "pointer", fontSize: "0.85rem",
-            fontWeight: tab === t.key ? 600 : 400,
-            border: `1.5px solid ${tab === t.key ? "var(--accent)" : "var(--border)"}`,
-            background: tab === t.key ? "linear-gradient(135deg, var(--accent-light), var(--honey-light))" : "transparent",
-            color: tab === t.key ? "var(--accent)" : "var(--text-secondary)",
-          }}>
+          <Button
+            key={t.key}
+            onClick={() => setTab(t.key as any)}
+            variant={tab === t.key ? "primary" : "ghost"}
+            size="sm"
+          >
             {t.label}
-          </button>
+          </Button>
         ))}
       </div>
 
-      {error && (
-        <div style={{ padding: "0.75rem 1rem", backgroundColor: "var(--red-light)", color: "var(--red)", borderRadius: "10px", marginBottom: "1rem", fontSize: "0.83rem" }}>
-          {error}
-        </div>
-      )}
+      {error && <Alert type="error" icon="❌" style={{ marginBottom: "1.5rem" }}>{error}</Alert>}
 
       {/* ── REPORT TAB ── */}
       {tab === "report" && (
         <>
           <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
-            <button className="btn-primary" onClick={fetchReport} disabled={loadingReport || !childId}>
+            <Button onClick={fetchReport} disabled={loadingReport || !childId} size="sm">
               {loadingReport ? "Loading…" : "🔄 Refresh Data"}
-            </button>
-            <button className="btn-secondary" onClick={fetchNarrative} disabled={loadingNarrative || !childId}>
+            </Button>
+            <Button onClick={fetchNarrative} disabled={loadingNarrative || !childId} variant="secondary" size="sm">
               {loadingNarrative ? "Generating…" : "✨ Generate AI Summary"}
-            </button>
-            <button className="btn-secondary" onClick={handleExportCsv} disabled={!user}>
+            </Button>
+            <Button onClick={handleExportCsv} disabled={!user} variant="secondary" size="sm">
               📥 Export local CSV
-            </button>
+            </Button>
             {report && (
-              <button className="btn-secondary" onClick={handlePrint}>
+              <Button onClick={handlePrint} variant="secondary" size="sm">
                 🖨️ Print / Save PDF
-              </button>
+              </Button>
             )}
           </div>
 
           {loadingReport && (
-            <div className="card" style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "2rem", justifyContent: "center" }}>
-              <div className="spinner" />
-              <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>Loading report data…</span>
-            </div>
+            <Card>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "1rem", justifyContent: "center" }}>
+                <div style={{ width: "18px", height: "18px", border: "2px solid #FFE5D9", borderTopColor: "#C07A5E", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+                <span style={{ fontSize: "0.875rem", color: "#6B7280" }}>Loading report data…</span>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              </div>
+            </Card>
           )}
 
           {/* Empty state — no report loaded yet */}
           {!report && !loadingReport && !error && (
-            <div className="card" style={{ textAlign: "center", padding: "2.5rem 2rem", border: "2px dashed var(--border)", backgroundColor: "var(--canvas)" }}>
-              <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>📋</div>
-              <h3 style={{ margin: "0 0 0.5rem", fontSize: "1rem", fontWeight: 700, color: "var(--text-primary)" }}>
-                No report loaded yet
-              </h3>
-              <p style={{ margin: "0 0 1.25rem", fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.65, maxWidth: "380px", marginLeft: "auto", marginRight: "auto" }}>
-                Click <strong>Refresh Data</strong> above to pull the latest progress, diet plans, and routines for {childName} into a printable report. Then use <strong>Generate AI Summary</strong> for a professional narrative.
-              </p>
-              <button className="btn-primary" onClick={fetchReport} disabled={!childId}>
-                🔄 Load Report
-              </button>
-            </div>
+            <Card>
+              <div style={{ textAlign: "center", padding: "2.5rem 2rem" }}>
+                <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>📋</div>
+                <h3 style={{ margin: "0 0 0.5rem", fontSize: "1rem", fontWeight: 700, color: "#2D3748" }}>
+                  No report loaded yet
+                </h3>
+                <p style={{ margin: "0 0 1.25rem", fontSize: "0.85rem", color: "#6B7280", lineHeight: 1.65, maxWidth: "380px", marginLeft: "auto", marginRight: "auto" }}>
+                  Click <strong>Refresh Data</strong> above to pull the latest progress, diet plans, and routines for {childName} into a printable report. Then use <strong>Generate AI Summary</strong> for a professional narrative.
+                </p>
+                <Button onClick={fetchReport} disabled={!childId}>
+                  🔄 Load Report
+                </Button>
+              </div>
+            </Card>
           )}
 
           {/* Printable report area */}
@@ -343,24 +374,24 @@ export default function ReportsPage() {
                 <div ref={printRef}>
                   {/* Title */}
                   <div style={{
-                    background: "linear-gradient(135deg, var(--accent-light) 0%, var(--honey-light) 100%)",
-                    border: "1px solid var(--border)", borderRadius: "14px",
+                    background: "linear-gradient(135deg, #FFE5D9 0%, #FDF5E8 100%)",
+                    border: "1px solid #E5E7EB", borderRadius: "14px",
                     padding: "1.25rem 1.5rem", marginBottom: "1.25rem",
                   }}>
-                    <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.2rem", fontWeight: 700, color: "var(--accent)" }}>
+                    <h1 style={{ margin: "0 0 0.25rem", fontSize: "1.2rem", fontWeight: 700, color: "#C07A5E" }}>
                       Child Development Report
                     </h1>
-                    <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#6B7280" }}>
                       Generated: {new Date(report.generatedAt).toLocaleString("en-IN")} · For: {report.child.name}
                     </p>
-                    <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: "var(--amber)", fontWeight: 500 }}>
+                    <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: "#D4A574", fontWeight: 500 }}>
                       ⚕️ This report is based on caregiver-logged data. It is NOT a clinical diagnosis.
                     </p>
                   </div>
 
                   {/* Child profile */}
-                  <div className="card" style={{ marginBottom: "1rem" }}>
-                    <h2 style={{ margin: "0 0 0.875rem", fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                  <Card style={{ marginBottom: "1rem" }}>
+                    <h2 style={{ margin: "0 0 0.875rem", fontSize: "0.95rem", fontWeight: 700, color: "#2D3748" }}>
                       👶 Child Profile
                     </h2>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
@@ -369,17 +400,17 @@ export default function ReportsPage() {
                         ["Age", report.child.age ? `${report.child.age} years` : "Not specified"],
                       ].map(([label, val]) => (
                         <div key={label as string}>
-                          <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>{label}</div>
+                          <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>{label}</div>
                           <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{val}</div>
                         </div>
                       ))}
                     </div>
 
                     {[
-                      ["Diagnoses / Conditions", report.child.diagnoses, "var(--accent)", "var(--accent-light)"],
-                      ["Sensory Triggers", report.child.sensoryTriggers, "var(--red)", "var(--red-light)"],
-                      ["Strengths", report.child.strengths, "var(--green)", "var(--green-light)"],
-                      ["Caregiver Goals", report.child.goals, "var(--blue)", "var(--blue-light)"],
+                      ["Diagnoses / Conditions", report.child.diagnoses, "#C07A5E", "#FFE5D9"],
+                      ["Sensory Triggers", report.child.sensoryTriggers, "#DC2626", "#FECACA"],
+                      ["Strengths", report.child.strengths, "#047857", "#D1F2EB"],
+                      ["Caregiver Goals", report.child.goals, "#5B7B94", "#E0E9F0"],
                     ].map(([label, items, color, bg]) => (
                       (items as string[]).length > 0 && (
                         <div key={label as string} style={{ marginTop: "0.875rem" }}>
@@ -396,74 +427,76 @@ export default function ReportsPage() {
                         </div>
                       )
                     ))}
-                  </div>
+                  </Card>
 
                   {/* Progress metrics */}
                   {Object.keys(report.progressSummary).length > 0 && (
-                    <div className="card" style={{ marginBottom: "1rem" }}>
+                    <Card style={{ marginBottom: "1rem" }}>
                       <h2 style={{ margin: "0 0 0.875rem", fontSize: "0.95rem", fontWeight: 700 }}>📈 Progress Summary</h2>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem" }}>
                         <thead>
-                          <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                          <tr style={{ borderBottom: "1px solid #E5E7EB" }}>
                             {["Metric", "Latest", "Average", "Entries"].map(h => (
-                              <th key={h} style={{ textAlign: "left", padding: "0.4rem 0.5rem", fontSize: "0.72rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase" }}>{h}</th>
+                              <th key={h} style={{ textAlign: "left", padding: "0.4rem 0.5rem", fontSize: "0.72rem", fontWeight: 600, color: "#6B7280", textTransform: "uppercase" }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {Object.entries(report.progressSummary).map(([key, val], i) => (
-                            <tr key={key} style={{ borderBottom: "1px solid var(--border)", backgroundColor: i % 2 === 0 ? "transparent" : "var(--surface-2)" }}>
+                            <tr key={key} style={{ borderBottom: "1px solid #E5E7EB", backgroundColor: i % 2 === 0 ? "transparent" : "#F9FAFB" }}>
                               <td style={{ padding: "0.45rem 0.5rem" }}>{METRIC_LABELS[key] ?? key}</td>
                               <td style={{ padding: "0.45rem 0.5rem", fontWeight: 600 }}>{val.latest}</td>
                               <td style={{ padding: "0.45rem 0.5rem" }}>{val.avg}</td>
-                              <td style={{ padding: "0.45rem 0.5rem", color: "var(--text-muted)" }}>{val.count}</td>
+                              <td style={{ padding: "0.45rem 0.5rem", color: "#6B7280" }}>{val.count}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </Card>
                   )}
 
                   {/* Latest routine */}
                   {report.latestRoutine && (
-                    <div className="card" style={{ marginBottom: "1rem" }}>
+                    <Card style={{ marginBottom: "1rem" }}>
                       <h2 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem", fontWeight: 700 }}>📅 Latest Daily Routine</h2>
                       <p style={{ margin: "0 0 0.3rem", fontSize: "0.85rem", fontWeight: 600 }}>{report.latestRoutine.title}</p>
-                      <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)" }}>{report.latestRoutine.focusGoal}</p>
-                      <p style={{ margin: "0.3rem 0 0", fontSize: "0.72rem", color: "var(--text-muted)" }}>Saved: {new Date(report.latestRoutine.savedAt).toLocaleDateString("en-IN")}</p>
-                    </div>
+                      <p style={{ margin: 0, fontSize: "0.8rem", color: "#6B7280" }}>{report.latestRoutine.focusGoal}</p>
+                      <p style={{ margin: "0.3rem 0 0", fontSize: "0.72rem", color: "#6B7280" }}>Saved: {new Date(report.latestRoutine.savedAt).toLocaleDateString("en-IN")}</p>
+                    </Card>
                   )}
 
                   {/* AI Narrative */}
                   {loadingNarrative && (
-                    <div className="card" style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "1.5rem", justifyContent: "center" }}>
-                      <div className="spinner" />
-                      <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>Generating professional summary with AI…</span>
-                    </div>
+                    <Card style={{ marginBottom: "1rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", justifyContent: "center" }}>
+                        <div style={{ width: "18px", height: "18px", border: "2px solid #FFE5D9", borderTopColor: "#C07A5E", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+                        <span style={{ fontSize: "0.875rem", color: "#6B7280" }}>Generating professional summary with AI…</span>
+                      </div>
+                    </Card>
                   )}
 
                   {narrative && !loadingNarrative && (
-                    <div className="card" style={{ borderLeft: "3px solid var(--green)", background: "linear-gradient(135deg, var(--surface) 0%, var(--green-light) 100%)" }}>
-                      <h2 style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", fontWeight: 700, color: "var(--green)" }}>
+                    <Card style={{ marginBottom: "1rem", borderLeft: "3px solid #8DA28B", background: "linear-gradient(135deg, #F9FAFB 0%, #E8F5F0 100%)" }}>
+                      <h2 style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", fontWeight: 700, color: "#8DA28B" }}>
                         ✨ AI-Generated Professional Summary
                       </h2>
-                      <div className="prose-neurosync" style={{ whiteSpace: "pre-wrap" }}>{narrative}</div>
-                      <p style={{ margin: "0.75rem 0 0", fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                      <div style={{ whiteSpace: "pre-wrap", fontSize: "0.9rem", lineHeight: 1.7, color: "#2D3748" }}>{narrative}</div>
+                      <p style={{ margin: "0.75rem 0 0", fontSize: "0.72rem", color: "#6B7280" }}>
                         AI-generated. Review before sharing. Not a clinical document.
                       </p>
-                    </div>
+                    </Card>
                   )}
                 </div>
 
                 {/* Print button again at bottom */}
                 {(report || narrative) && (
                   <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.25rem" }}>
-                    <button className="btn-primary" onClick={handlePrint}>
+                    <Button onClick={handlePrint}>
                       🖨️ Print / Save as PDF
-                    </button>
-                    <button className="btn-secondary" onClick={() => setTab("share")}>
+                    </Button>
+                    <Button onClick={() => setTab("share")} variant="secondary">
                       👥 Share with Institution →
-                    </button>
+                    </Button>
                   </div>
                 )}
               </motion.div>
@@ -476,73 +509,68 @@ export default function ReportsPage() {
       {tab === "share" && (
         <div>
           {/* Info banner */}
-          <div style={{
-            padding: "1rem 1.25rem",
-            background: "linear-gradient(90deg, var(--blue-light) 0%, var(--accent-light) 100%)",
-            border: "1px solid var(--border)", borderRadius: "12px", marginBottom: "1.25rem",
-          }}>
-            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-primary)", lineHeight: 1.65 }}>
+          <Alert
+            type="info"
+            icon="ℹ️"
+            style={{ marginBottom: "1.25rem" }}
+          >
+            <p style={{ margin: 0, fontSize: "0.85rem", color: "#1F2937", lineHeight: 1.65 }}>
               <strong>How sharing works:</strong> Enter the email address of the Anganwadi worker, special educator, ASHA worker, or doctor.
               They must have a NeuroSync account — ask them to register at this app first.
               Once shared, they can view <strong>{childName}'s</strong> progress, diet plans, and routines but cannot edit or delete data.
             </p>
-          </div>
+          </Alert>
 
           {/* Share form */}
-          <div className="card" style={{ marginBottom: "1.25rem" }}>
+          <Card style={{ marginBottom: "1.25rem" }}>
             <h2 style={{ margin: "0 0 1rem", fontSize: "0.95rem", fontWeight: 600 }}>Add Institution / Worker</h2>
-            <form onSubmit={handleShare} style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 260px" }}>
-                <label className="label">Worker / Institution email</label>
-                <input
-                  className="input"
+            <form onSubmit={handleShare} style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+              <FormGroup label="Worker / Institution email" style={{ flex: "1 1 260px" }}>
+                <Input
                   type="email"
                   value={shareEmail}
                   onChange={e => setShareEmail(e.target.value)}
                   placeholder="e.g. worker@anganwadi.gov.in"
                   required
                 />
-              </div>
-              <div style={{ alignSelf: "flex-end" }}>
-                <button className="btn-primary" type="submit" disabled={shareLoading || !shareEmail.trim()}>
-                  {shareLoading ? "Sharing…" : "Share Access →"}
-                </button>
-              </div>
+              </FormGroup>
+              <Button type="submit" disabled={shareLoading || !shareEmail.trim()}>
+                {shareLoading ? "Sharing…" : "Share Access →"}
+              </Button>
             </form>
 
             {shareMsg && (
-              <div style={{
-                marginTop: "0.75rem", padding: "0.6rem 0.875rem", borderRadius: "8px",
-                backgroundColor: shareMsg.type === "ok" ? "var(--green-light)" : "var(--red-light)",
-                color: shareMsg.type === "ok" ? "var(--green)" : "var(--red)",
-                fontSize: "0.83rem", fontWeight: 500,
-              }}>
+              <Alert
+                type={shareMsg.type === "ok" ? "success" : "error"}
+                icon={shareMsg.type === "ok" ? "✅" : "❌"}
+                style={{ marginTop: "0.75rem" }}
+              >
                 {shareMsg.text}
-              </div>
+              </Alert>
             )}
-          </div>
+          </Card>
 
           {/* Current shares list */}
-          <div className="card">
+          <Card>
             <h2 style={{ margin: "0 0 0.875rem", fontSize: "0.95rem", fontWeight: 600 }}>
               People with access to {childName}'s profile
             </h2>
 
             {shares.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+              <div style={{ textAlign: "center", padding: "1.5rem", color: "#6B7280", fontSize: "0.85rem" }}>
                 No one else has access yet. Share above to add an institution or worker.
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
                 {shares.map(s => {
                   const isMe = s.id === user?.id;
-                  const roleColor = ROLE_COLORS[s.role] ?? "var(--text-muted)";
+                  const roleColor = ROLE_COLORS[s.role] ?? "#6B7280";
                   return (
                     <div key={s.id} style={{
                       display: "flex", alignItems: "center", gap: "0.75rem",
                       padding: "0.75rem 1rem", borderRadius: "10px",
-                      backgroundColor: isMe ? "var(--accent-light)" : "var(--canvas)",
-                      border: `1px solid ${isMe ? "var(--accent)" : "var(--border)"}`,
+                      backgroundColor: isMe ? "#FFE5D9" : "#F9FAFB",
+                      border: `1px solid ${isMe ? "#C07A5E" : "#E5E7EB"}`,
                     }}>
                       <div style={{
                         width: "36px", height: "36px", borderRadius: "50%",
@@ -556,11 +584,11 @@ export default function ReportsPage() {
                           : s.role === "parent" ? "👪" : "👤"}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "0.85rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div style={{ fontSize: "0.85rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1F2937" }}>
                           {s.display_name || s.email}
-                          {isMe && <span style={{ marginLeft: "0.4rem", fontSize: "0.7rem", color: "var(--accent)" }}>(you)</span>}
+                          {isMe && <span style={{ marginLeft: "0.4rem", fontSize: "0.7rem", color: "#C07A5E" }}>(you)</span>}
                         </div>
-                        <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{s.email}</div>
+                        <div style={{ fontSize: "0.72rem", color: "#6B7280" }}>{s.email}</div>
                       </div>
                       <span style={{
                         padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 600,
@@ -569,24 +597,21 @@ export default function ReportsPage() {
                         {ROLE_LABELS[s.role] ?? s.role}
                       </span>
                       {!isMe && (
-                        <button
+                        <Button
                           onClick={() => handleRevoke(s.id, s.email)}
                           disabled={revokeLoading === s.id}
-                          style={{
-                            padding: "0.3rem 0.65rem", borderRadius: "7px", border: "1px solid var(--red-light)",
-                            backgroundColor: "var(--red-light)", color: "var(--red)",
-                            fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", flexShrink: 0,
-                          }}
+                          variant="error"
+                          size="sm"
                         >
                           {revokeLoading === s.id ? "…" : "Revoke"}
-                        </button>
+                        </Button>
                       )}
                     </div>
                   );
                 })}
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
     </div>

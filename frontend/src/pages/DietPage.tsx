@@ -3,6 +3,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { apiPost, apiGet } from "../lib/api";
 import FeatureTour from "../components/FeatureTour";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { Alert } from "../components/ui/Alert";
+import { FormGroup } from "../components/ui/FormGroup";
+import { Input } from "../components/ui/Input";
 
 interface DayMeal { day: string; breakfast: string; lunch: string; dinner: string; snacks: string[]; sensoryNotes: string; allergenWarnings: string[]; }
 interface DietPlan { weeklyPlan: DayMeal[]; generalNotes: string; nutritionFocus: string[]; }
@@ -57,13 +62,40 @@ Return JSON: { "weeklyPlan": [{ "day":"Monday","breakfast":"..","lunch":"..","di
   };
 
   return (
-    <div style={{ padding: "1.5rem", maxWidth: "800px", margin: "0 auto" }}>
-      <div style={{ marginBottom: "1.75rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.4rem" }}>
-          <span style={{ fontSize: "1.5rem" }}>🥗</span>
-          <h1 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>Diet Planner</h1>
+    <div style={{ padding: "1.5rem", maxWidth: "900px", margin: "0 auto", backgroundColor: "var(--color-bg)" }}>
+      <div style={{ marginBottom: "2rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.5rem" }}>
+          <div style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "var(--radius-lg)",
+            background: "var(--gradient-primary)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "1.5rem",
+            boxShadow: "0 2px 8px rgba(192, 122, 94, 0.15)",
+          }}>
+            🥗
+          </div>
+          <div>
+            <h1 style={{
+              margin: 0,
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              color: "var(--color-text)",
+            }}>
+              Diet Planner
+            </h1>
+            <p style={{
+              margin: "0.25rem 0 0",
+              fontSize: "0.85rem",
+              color: "var(--color-text-muted)",
+            }}>
+              Sensory-aware, personalised weekly meal plans.
+            </p>
+          </div>
         </div>
-        <p style={{ margin: 0, fontSize: "0.83rem", color: "var(--text-secondary)" }}>Sensory-aware, structured weekly meal plans.</p>
       </div>
 
       <FeatureTour
@@ -77,13 +109,39 @@ Return JSON: { "weeklyPlan": [{ "day":"Monday","breakfast":"..","lunch":"..","di
           "Each day shows breakfast, lunch, dinner, and snacks with allergen warnings.",
           "Tap 'Save Plan' to store it — view past plans under the History tab.",
         ]}
-        accentColor="var(--green)"
+        accentColor="var(--color-primary)"
       />
 
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
+      {/* Tabs */}
+      <div style={{
+        display: "flex",
+        gap: "0.75rem",
+        marginBottom: "2rem",
+        borderBottom: `2px solid var(--color-secondary-soft)`,
+        paddingBottom: "1rem",
+      }}>
         {(["generate","history"] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{ padding: "0.45rem 1rem", borderRadius: "8px", border: `1.5px solid ${tab === t ? "var(--accent)" : "var(--border)"}`, backgroundColor: tab === t ? "var(--accent-light)" : "transparent", color: tab === t ? "var(--accent)" : "var(--text-secondary)", fontSize: "0.83rem", fontWeight: tab === t ? 600 : 400, cursor: "pointer" }}>
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{
+              padding: "0.5rem 1.25rem",
+              borderRadius: "var(--radius-md)",
+              border: "none",
+              backgroundColor: tab === t ? "var(--color-primary)" : "transparent",
+              color: tab === t ? "white" : "var(--color-text-muted)",
+              fontSize: "0.9rem",
+              fontWeight: tab === t ? 600 : 500,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              if (tab !== t) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-primary-soft)";
+            }}
+            onMouseLeave={(e) => {
+              if (tab !== t) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+            }}
+          >
             {t === "generate" ? "Generate Plan" : `History (${history.length})`}
           </button>
         ))}
@@ -91,70 +149,299 @@ Return JSON: { "weeklyPlan": [{ "day":"Monday","breakfast":"..","lunch":"..","di
 
       {tab === "generate" && (
         <>
-          <div className="card" style={{ marginBottom: "1.25rem" }}>
-            <h2 style={{ margin: "0 0 1rem", fontSize: "0.95rem", fontWeight: 600 }}>Preferences</h2>
-            <div style={{ marginBottom: "1rem" }}>
-              <label className="label">Dietary restrictions</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                {DIETARY.map(d => { const a = dietary.includes(d); return (
-                  <button key={d} type="button" onClick={() => toggle(dietary, setDietary, d)}
-                    style={{ padding: "0.35rem 0.65rem", borderRadius: "999px", border: `1.5px solid ${a ? "var(--green)" : "var(--border)"}`, backgroundColor: a ? "var(--green-light)" : "var(--canvas)", color: a ? "var(--green)" : "var(--text-secondary)", fontSize: "0.75rem", fontWeight: a ? 600 : 400, cursor: "pointer", transition: "all 0.12s" }}>{d}</button>
-                ); })}
-              </div>
+          <Card size="md" style={{ marginBottom: "1.5rem" }}>
+            <h2 style={{
+              margin: "0 0 1.5rem",
+              fontSize: "1.1rem",
+              fontWeight: 700,
+              color: "var(--color-text)",
+            }}>
+              Meal Plan Preferences
+            </h2>
+
+            <div style={{ marginBottom: "1.75rem" }}>
+              <FormGroup label="Dietary restrictions">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+                  {DIETARY.map(d => {
+                    const active = dietary.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => toggle(dietary, setDietary, d)}
+                        style={{
+                          padding: "0.6rem 1rem",
+                          borderRadius: "var(--radius-full)",
+                          border: `2px solid ${active ? "var(--color-accent)" : "var(--color-secondary-soft)"}`,
+                          backgroundColor: active ? "var(--color-accent-soft)" : "var(--color-surface)",
+                          color: active ? "var(--color-accent-dark)" : "var(--color-text-muted)",
+                          fontSize: "0.875rem",
+                          fontWeight: active ? 600 : 500,
+                          cursor: "pointer",
+                          transition: "all 0.16s",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!active) (e.currentTarget as HTMLElement).style.borderColor = "var(--color-accent)";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!active) (e.currentTarget as HTMLElement).style.borderColor = "var(--color-secondary-soft)";
+                        }}
+                      >
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FormGroup>
             </div>
-            <div style={{ marginBottom: "1rem" }}>
-              <label className="label">Texture preferences</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                {TEXTURES.map(t => { const a = textures.includes(t); return (
-                  <button key={t} type="button" onClick={() => toggle(textures, setTextures, t)}
-                    style={{ padding: "0.35rem 0.65rem", borderRadius: "999px", border: `1.5px solid ${a ? "var(--blue)" : "var(--border)"}`, backgroundColor: a ? "var(--blue-light)" : "var(--canvas)", color: a ? "var(--blue)" : "var(--text-secondary)", fontSize: "0.75rem", fontWeight: a ? 600 : 400, cursor: "pointer", transition: "all 0.12s" }}>{t}</button>
-                ); })}
-              </div>
+
+            <div style={{ marginBottom: "1.75rem" }}>
+              <FormGroup label="Texture preferences">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+                  {TEXTURES.map(t => {
+                    const active = textures.includes(t);
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => toggle(textures, setTextures, t)}
+                        style={{
+                          padding: "0.6rem 1rem",
+                          borderRadius: "var(--radius-full)",
+                          border: `2px solid ${active ? "var(--color-secondary)" : "var(--color-secondary-soft)"}`,
+                          backgroundColor: active ? "var(--color-secondary-soft)" : "var(--color-surface)",
+                          color: active ? "var(--color-secondary-dark)" : "var(--color-text-muted)",
+                          fontSize: "0.875rem",
+                          fontWeight: active ? 600 : 500,
+                          cursor: "pointer",
+                          transition: "all 0.16s",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!active) (e.currentTarget as HTMLElement).style.borderColor = "var(--color-secondary)";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!active) (e.currentTarget as HTMLElement).style.borderColor = "var(--color-secondary-soft)";
+                        }}
+                      >
+                        {t}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FormGroup>
             </div>
-            <div style={{ marginBottom: "1.25rem" }}>
-              <label className="label">Notes</label>
-              <textarea className="input" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any other mealtime considerations…" rows={2} style={{ resize: "vertical" }} />
+
+            <div style={{ marginBottom: "1.5rem" }}>
+              <FormGroup label="Additional notes" helperText="Any other mealtime considerations…">
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Any other mealtime considerations…"
+                  rows={3}
+                  style={{
+                    width: "100%",
+                    padding: "0.875rem 1rem",
+                    border: `1.5px solid var(--color-secondary-soft)`,
+                    borderRadius: "var(--radius-lg)",
+                    backgroundColor: "var(--color-surface)",
+                    color: "var(--color-text)",
+                    fontSize: "0.95rem",
+                    fontFamily: "var(--font-body)",
+                    resize: "vertical",
+                    outline: "none",
+                    fontWeight: 400,
+                    transition: "border-color 0.16s",
+                  }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-primary)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--color-secondary-soft)")}
+                />
+              </FormGroup>
             </div>
-            <button className="btn-primary" onClick={generate} disabled={loading}>{loading ? "Generating…" : "Generate 7-Day Plan →"}</button>
-          </div>
-          {error && <div style={{ padding: "0.75rem 1rem", backgroundColor: "var(--red-light)", color: "var(--red)", borderRadius: "10px", marginBottom: "1rem", fontSize: "0.83rem" }}>{error}</div>}
-          {loading && <div className="card" style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "2rem", justifyContent: "center" }}>
-            <div style={{ width: "20px", height: "20px", border: "2px solid var(--accent-light)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
-            <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>Building meal plan…</span>
-            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          </div>}
+
+            <Button
+              variant="primary"
+              onClick={generate}
+              disabled={loading}
+              loading={loading}
+              fullWidth
+            >
+              Generate 7-Day Plan →
+            </Button>
+          </Card>
+
+          {error && <Alert type="error" style={{ marginBottom: "1.5rem" }}>{error}</Alert>}
+
+          {loading && (
+            <Card size="md" style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "1rem",
+              padding: "2rem",
+              justifyContent: "center",
+            }}>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  border: `3px solid var(--color-primary-soft)`,
+                  borderTopColor: "var(--color-primary)",
+                  borderRadius: "var(--radius-full)",
+                }}
+              />
+              <span style={{ fontSize: "0.9rem", color: "var(--color-text-muted)" }}>Building meal plan…</span>
+            </Card>
+          )}
+
           <AnimatePresence>
             {plan && !loading && (
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-                <div className="card" style={{ marginBottom: "1rem", borderLeft: "3px solid var(--green)" }}>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.5rem" }}>
-                    {plan.nutritionFocus?.map((f, i) => <span key={i} style={{ padding: "0.15rem 0.5rem", backgroundColor: "var(--green-light)", color: "var(--green)", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 500 }}>{f}</span>)}
+                <Card size="md" style={{
+                  marginBottom: "1.5rem",
+                  borderLeft: `4px solid var(--color-accent)`,
+                  background: "linear-gradient(135deg, var(--color-accent-soft) 0%, var(--color-surface) 100%)",
+                }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
+                    {plan.nutritionFocus?.map((f, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          padding: "0.4rem 0.875rem",
+                          backgroundColor: "var(--color-accent)",
+                          color: "white",
+                          borderRadius: "var(--radius-full)",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {f}
+                      </span>
+                    ))}
                   </div>
-                  <p style={{ margin: 0, fontSize: "0.83rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>{plan.generalNotes}</p>
-                </div>
-                <div style={{ display: "grid", gap: "0.875rem" }}>
+                  <p style={{
+                    margin: 0,
+                    fontSize: "0.95rem",
+                    color: "var(--color-text)",
+                    lineHeight: 1.6,
+                  }}>
+                    {plan.generalNotes}
+                  </p>
+                </Card>
+
+                <div style={{ display: "grid", gap: "1rem", marginBottom: "1.5rem" }}>
                   {plan.weeklyPlan?.map((d, i) => (
-                    <div key={i} className="card">
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                        <h3 style={{ margin: 0, fontSize: "0.88rem", fontWeight: 700, color: "var(--accent)" }}>{d.day}</h3>
-                        {d.allergenWarnings?.length > 0 && <span style={{ fontSize: "0.7rem", padding: "0.15rem 0.45rem", backgroundColor: "var(--amber-light)", color: "var(--amber)", borderRadius: "4px", fontWeight: 500 }}>⚠️ {d.allergenWarnings.join(", ")}</span>}
+                    <Card key={i} size="md">
+                      <div style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "1rem",
+                      }}>
+                        <h3 style={{
+                          margin: 0,
+                          fontSize: "1rem",
+                          fontWeight: 700,
+                          color: "var(--color-primary)",
+                        }}>
+                          {d.day}
+                        </h3>
+                        {d.allergenWarnings?.length > 0 && (
+                          <span style={{
+                            fontSize: "0.75rem",
+                            padding: "0.4rem 0.75rem",
+                            backgroundColor: "var(--color-warning-light)",
+                            color: "var(--color-warning)",
+                            borderRadius: "var(--radius-md)",
+                            fontWeight: 600,
+                          }}>
+                            ⚠️ {d.allergenWarnings.join(", ")}
+                          </span>
+                        )}
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                        {[["🌅", "Breakfast", d.breakfast],["☀️","Lunch",d.lunch],["🌙","Dinner",d.dinner]].map(([e,l,m]) => (
-                          <div key={l as string} style={{ padding: "0.5rem", backgroundColor: "var(--canvas)", borderRadius: "7px", border: "1px solid var(--border)" }}>
-                            <div style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "0.2rem" }}>{e} {l}</div>
-                            <div style={{ fontSize: "0.78rem" }}>{m}</div>
+
+                      <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: "0.75rem",
+                        marginBottom: "1rem",
+                      }}>
+                        {[
+                          ["🌅", "Breakfast", d.breakfast],
+                          ["☀️", "Lunch", d.lunch],
+                          ["🌙", "Dinner", d.dinner],
+                        ].map(([emoji, label, meal]) => (
+                          <div
+                            key={label as string}
+                            style={{
+                              padding: "0.875rem",
+                              backgroundColor: "var(--color-secondary-soft)",
+                              borderRadius: "var(--radius-lg)",
+                              border: `1px solid var(--color-secondary-light, #B8CDE1)`,
+                            }}
+                          >
+                            <div style={{
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              color: "var(--color-secondary-dark)",
+                              marginBottom: "0.4rem",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                            }}>
+                              <span>{emoji}</span> {label}
+                            </div>
+                            <div style={{
+                              fontSize: "0.85rem",
+                              color: "var(--color-text)",
+                              lineHeight: 1.5,
+                            }}>
+                              {meal}
+                            </div>
                           </div>
                         ))}
                       </div>
-                      {d.snacks?.length > 0 && <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>🍎 <strong>Snacks:</strong> {d.snacks.join(" · ")}</div>}
-                      {d.sensoryNotes && <div style={{ fontSize: "0.75rem", color: "var(--blue)", backgroundColor: "var(--blue-light)", padding: "0.35rem 0.55rem", borderRadius: "5px" }}>💡 {d.sensoryNotes}</div>}
-                    </div>
+
+                      {d.snacks?.length > 0 && (
+                        <div style={{
+                          fontSize: "0.85rem",
+                          color: "var(--color-text-muted)",
+                          marginBottom: "0.75rem",
+                          paddingBottom: "0.75rem",
+                          borderBottom: `1px solid var(--color-secondary-soft)`,
+                        }}>
+                          <strong style={{ color: "var(--color-text)" }}>🍎 Snacks:</strong> {d.snacks.join(" · ")}
+                        </div>
+                      )}
+
+                      {d.sensoryNotes && (
+                        <div style={{
+                          fontSize: "0.8rem",
+                          color: "var(--color-secondary-dark)",
+                          backgroundColor: "var(--color-secondary-soft)",
+                          padding: "0.75rem",
+                          borderRadius: "var(--radius-md)",
+                          borderLeft: `3px solid var(--color-secondary)`,
+                        }}>
+                          💡 <strong>Sensory note:</strong> {d.sensoryNotes}
+                        </div>
+                      )}
+                    </Card>
                   ))}
                 </div>
-                <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.25rem" }}>
-                  <button className="btn-primary" onClick={save} disabled={saving || !childId}>{saving ? "Saving…" : "💾 Save Plan"}</button>
-                  <button className="btn-secondary" onClick={() => setPlan(null)}>Generate New</button>
+
+                <div style={{ display: "flex", gap: "0.75rem" }}>
+                  <Button
+                    variant="success"
+                    onClick={save}
+                    disabled={saving || !childId}
+                    loading={saving}
+                  >
+                    💾 Save Plan
+                  </Button>
+                  <Button variant="secondary" onClick={() => setPlan(null)}>
+                    Generate New
+                  </Button>
                 </div>
               </motion.div>
             )}
@@ -165,21 +452,68 @@ Return JSON: { "weeklyPlan": [{ "day":"Monday","breakfast":"..","lunch":"..","di
       {tab === "history" && (
         <div>
           {history.length === 0
-            ? <div className="card" style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-muted)" }}><div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📋</div>No saved plans yet.</div>
-            : <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+            ? (
+              <Card size="md" style={{
+                textAlign: "center",
+                padding: "3rem 2rem",
+                color: "var(--color-text-muted)",
+              }}>
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>📋</div>
+                <p style={{ margin: 0, fontSize: "0.95rem" }}>No saved plans yet.</p>
+              </Card>
+            )
+            : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 {history.map((p, i) => (
-                  <div key={i} className="card">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                      <span style={{ fontSize: "0.83rem", fontWeight: 600 }}>Plan #{history.length - i}</span>
-                      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{new Date(p.created_at).toLocaleDateString()}</span>
+                  <Card key={i} size="md">
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.75rem",
+                    }}>
+                      <span style={{
+                        fontSize: "0.9rem",
+                        fontWeight: 600,
+                        color: "var(--color-text)",
+                      }}>
+                        Plan #{history.length - i}
+                      </span>
+                      <span style={{
+                        fontSize: "0.8rem",
+                        color: "var(--color-text-muted)",
+                      }}>
+                        {new Date(p.created_at).toLocaleDateString()}
+                      </span>
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
-                      {p.nutritionFocus?.map((f: string, j: number) => <span key={j} style={{ padding: "0.15rem 0.45rem", backgroundColor: "var(--green-light)", color: "var(--green)", borderRadius: "999px", fontSize: "0.7rem" }}>{f}</span>)}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
+                      {p.nutritionFocus?.map((f: string, j: number) => (
+                        <span
+                          key={j}
+                          style={{
+                            padding: "0.35rem 0.75rem",
+                            backgroundColor: "var(--color-accent-soft)",
+                            color: "var(--color-accent-dark)",
+                            borderRadius: "var(--radius-full)",
+                            fontSize: "0.75rem",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {f}
+                        </span>
+                      ))}
                     </div>
-                    <button className="btn-secondary" style={{ marginTop: "0.75rem", fontSize: "0.78rem" }} onClick={() => { setPlan(p); setTab("generate"); }}>View Plan →</button>
-                  </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => { setPlan(p); setTab("generate"); }}
+                    >
+                      View Plan →
+                    </Button>
+                  </Card>
                 ))}
               </div>
+            )
           }
         </div>
       )}
