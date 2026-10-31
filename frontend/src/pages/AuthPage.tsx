@@ -14,7 +14,7 @@ type UseCase = "autistic_child" | "caregiver_burnout" | null;
 type Screen = "usecase" | "details";
 
 export default function AuthPage() {
-  const { login } = useAuth();
+  const { login, refreshUser } = useAuth();
   const { t, lang, setLang, supportedLanguages } = useLang();
   const navigate = useNavigate();
 
@@ -51,25 +51,16 @@ export default function AuthPage() {
 
       const data = await response.json();
       
+      // Store the session with the new token
       storeSession(data.token, { 
         email: data.email, 
         role: data.role, 
         displayName: data.displayName 
       });
       
-      const meResponse = await fetch("/api/me", {
-        headers: { "Authorization": `Bearer ${data.token}` },
-      });
-      
-      if (meResponse.ok) {
-        const userData = await meResponse.json();
-        storeAppData({ 
-          user: userData, 
-          activeChildId: userData.children?.[0]?.id ?? null 
-        });
-      }
-      
-      navigate("/");
+      // Refresh user context to fetch /api/me and set user state
+      // This will automatically redirect via routing logic
+      await refreshUser();
     } catch (err: any) {
       setError(err.message || "Something went wrong");
     } finally {
