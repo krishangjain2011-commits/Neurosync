@@ -1,35 +1,25 @@
-import react from '@vitejs/plugin-react';
-import path from 'path';
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, '.'),
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
     },
   },
-  server: {
-    host: true,
-    port: 3000,
-    allowedHosts: ['.onrender.com'],
-    hmr: process.env.DISABLE_HMR !== 'true',
-  },
   build: {
-    outDir: 'dist',
+    outDir: '../dist',
     emptyOutDir: true,
-    sourcemap: false,
-    // Chunk size warning threshold — fine for production
-    chunkSizeWarningLimit: 800,
-    rollupOptions: {
-      output: {
-        // Split large vendor libs for better caching
-        manualChunks: {
-          router: ['react-router-dom'],
-          motion: ['framer-motion'],
-          charts: ['recharts'],
-        },
-      },
+  },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, './src'),
     },
   },
 });

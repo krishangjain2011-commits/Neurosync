@@ -1,45 +1,34 @@
 services:
   - type: web
     name: neurosync
-    runtime: node
-    region: singapore   # closest to India
+    env: node
     plan: free
-
-    # Build: install all dependencies and compile React frontend
-    buildCommand: npm ci --include=dev && npm run build
-
-    # Start: run Express server (serves built frontend + API)
-    startCommand: NODE_ENV=production node --import tsx/esm server.ts
-
-    # Health check — Render pings this to confirm the service is up
-    healthCheckPath: /health
-
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
     envVars:
       - key: NODE_ENV
         value: production
-
-      # ── AI (Groq — required) ─────────────────────────────────────────────
-      # Get a free key at https://console.groq.com (no credit card)
-      # Used for: chat, behavior AI, reports, handwriting vision analysis
+      - key: PORT
+        value: 3000
       - key: GROQ_API_KEY
-        sync: false         # fill in manually on Render dashboard
-
+        scope: secret
       - key: GROQ_MODEL
         value: llama-3.3-70b-versatile
-
-      # ── Database ─────────────────────────────────────────────────────────
-      # Free tier: ephemeral — data resets on redeploy.
-      # Paid tier: add a Disk at /data and set DB_PATH=/data/neurosync.db
       - key: DB_PATH
-        value: /tmp/neurosync.db
-
-      # ── Audio uploads ─────────────────────────────────────────────────────
-      # Where audio cue recordings are stored.
-      # Free tier: ephemeral — use /tmp. Paid: mount a disk at /data.
+        value: /data/neurosync.db
       - key: UPLOADS_DIR
-        value: /tmp/uploads
-      # ML sidecar — not available on Render free tier (Python process).
-      # JS fallback embedder is used automatically when this is not set.
-      # For real MFCC embeddings, run ml/ locally or on a separate service.
-      # - key: ML_SIDECAR_URL
-      #   value: https://your-ml-sidecar.onrender.com
+        value: /data/uploads
+
+  - type: static site
+    name: diagnostic-engine
+    env: node
+    buildCommand: cd diagnostic-engine && npm install && npm run build
+    staticPublishPath: diagnostic-engine/.next
+    routes:
+      - path: /diagnostics/*
+        destination: /diagnostic-engine
+
+disks:
+  - name: neurosync-data
+    mountPath: /data
+    sizeGB: 1

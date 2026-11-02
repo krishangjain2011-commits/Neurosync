@@ -1,8 +1,27 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
-.venv/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
 venv/
-models/*.json
+.venv
 *.egg-info/
 dist/
+build/
+
+# ML Models
+*.pkl
+*.h5
+*.pth
+*.pt
+*.onnx
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
