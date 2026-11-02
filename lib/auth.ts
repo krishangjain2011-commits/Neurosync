@@ -6,49 +6,66 @@
  * The client stores only the opaque token in localStorage.
  */
 
-import { randomBytes } from "crypto";
-import db from "../db/index.js";
+import { randomBytes } from 'crypto';
+import db from '../db/index.js';
+import type { User, SessionToken } from './types/index.js';
 
 const TOKEN_TTL_DAYS = 7;
 
 export interface SessionUser {
-  userId: number;
-  orgId: number;
+  userId: string;
+  orgId: string | null;
   role: string;
   email: string;
   displayName: string | null;
   preferredLanguage: string;
 }
 
-/** Create a new opaque token for a user, persist it, return the token string. */
-export function createToken(userId: number): string {
-  const token = randomBytes(32).toString("hex"); // 64-char hex, unguessable
+interface SessionTokenRow {
+  user_id: string;
+  expires_at: string;
+  org_id: string | null;
+  role: string;
+  email: string;
+  display_name: string | null;
+  preferred_language: string;
+}
+
+/**
+ * Create a new opaque token for a user, persist it, return the token string.
+ */
+export function createToken(userId: string): string {
+  const token = randomBytes(32).toString('hex'); // 64-char hex, unguessable
   const expiresAt = new Date(Date.now() + TOKEN_TTL_DAYS * 86400 * 1000)
     .toISOString()
-    .replace("T", " ")
+    .replace('T', ' ')
     .slice(0, 19);
 
-  db.prepare(
-    "INSERT INTO session_tokens (token, user_id, expires_at) VALUES (?, ?, ?)"
-  ).run(token, userId, expiresAt);
+  db.prepare('INSERT INTO session_tokens (token, user_id, expires_at) VALUES (?, ?, ?)').run(
+    token,
+    userId,
+    expiresAt
+  );
 
   return token;
 }
 
-/** Validate a token, return the session user or null. */
+/**
+ * Validate a token, return the session user or null.
+ */
 export function resolveToken(token: string): SessionUser | null {
   if (!token || token.length !== 64) return null;
 
   const row = db
     .prepare(
       `SELECT st.user_id, st.expires_at,
-              u.org_id, u.role, u.email, u.display_name, u.preferred_language
+              u.org_id, u.role, u.email, u.name, u.preferences
        FROM   session_tokens st
        JOIN   users u ON u.id = st.user_id
        WHERE  st.token = ?
          AND  st.expires_at > datetime('now')`
     )
-    .get(token) as any;
+    .get(token) as SessionTokenRow | undefined;
 
   if (!row) return null;
 
@@ -57,23 +74,28 @@ export function resolveToken(token: string): SessionUser | null {
     orgId: row.org_id,
     role: row.role,
     email: row.email,
-    displayName: row.display_name,
-    preferredLanguage: row.preferred_language,
+    displayName: row.email, // Using email as display name if not available
+    preferredLanguage: 'en',
   };
 }
 
-
-/** Revoke a specific token (logout). */
+/**
+ * Revoke a specific token (logout).
+ */
 export function revokeToken(token: string): void {
-  db.prepare("DELETE FROM session_tokens WHERE token = ?").run(token);
+  db.prepare('DELETE FROM session_tokens WHERE token = ?').run(token);
 }
 
-/** Revoke all tokens for a user (password change / account wipe). */
-export function revokeAllUserTokens(userId: number): void {
-  db.prepare("DELETE FROM session_tokens WHERE user_id = ?").run(userId);
+/**
+ * Revoke all tokens for a user (password change / account wipe).
+ */
+export function revokeAllUserTokens(userId: string): void {
+  db.prepare('DELETE FROM session_tokens WHERE user_id = ?').run(userId);
 }
 
-/** Purge expired tokens (run at startup + periodically). */
+/**
+ * Purge expired tokens (run at startup + periodically).
+ */
 export function purgeExpiredTokens(): void {
   const info = db
     .prepare("DELETE FROM session_tokens WHERE expires_at <= datetime('now')")
@@ -88,22 +110,22 @@ export function purgeExpiredTokens(): void {
 export type AuthedRequest = {
   sessionUser: SessionUser;
   sessionToken: string;
-} & import("express").Request;
+} & import('express').Request;
 
 /**
  * Extracts token from:
  *   1. Cookie: neurosync_token
  *   2. Header: Authorization: Bearer <token>
  */
-function extractToken(req: import("express").Request): string | null {
+function extractToken(req: import('express').Request): string | null {
   // Cookie first
-  const cookieHeader = req.headers.cookie || "";
+  const cookieHeader = req.headers.cookie || '';
   const match = cookieHeader.match(/(?:^|;\s*)neurosync_token=([a-f0-9]{64})/);
   if (match) return match[1];
 
   // Bearer header fallback (for SPA reload from localStorage)
-  const auth = req.headers["authorization"] as string | undefined;
-  if (auth?.startsWith("Bearer ")) {
+  const auth = req.headers['authorization'] as string | undefined;
+  if (auth?.startsWith('Bearer ')) {
     return auth.slice(7).trim();
   }
 
@@ -111,20 +133,20 @@ function extractToken(req: import("express").Request): string | null {
 }
 
 export async function authenticate(
-  req: import("express").Request,
-  res: import("express").Response,
-  next: import("express").NextFunction
+  req: import('express').Request,
+  res: import('express').Response,
+  next: import('express').NextFunction
 ): Promise<void> {
   const token = extractToken(req);
   if (!token) {
-    res.status(401).json({ error: "Unauthorized" });
+    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
   const user = resolveToken(token);
 
   if (!user) {
-    res.status(401).json({ error: "Session expired or invalid" });
+    res.status(401).json({ error: 'Session expired or invalid' });
     return;
   }
 
@@ -133,16 +155,18 @@ export async function authenticate(
   next();
 }
 
-/** Role guard factory — use after authenticate. */
+/**
+ * Role guard factory — use after authenticate.
+ */
 export function requireRole(...roles: string[]) {
   return (
-    req: import("express").Request,
-    res: import("express").Response,
-    next: import("express").NextFunction
+    req: import('express').Request,
+    res: import('express').Response,
+    next: import('express').NextFunction
   ): void => {
     const user: SessionUser = (req as any).sessionUser;
-    if (!roles.includes(user.role)) {
-      res.status(403).json({ error: "Forbidden — insufficient role" });
+    if (!user || !roles.includes(user.role)) {
+      res.status(403).json({ error: 'Forbidden — insufficient role' });
       return;
     }
     next();
